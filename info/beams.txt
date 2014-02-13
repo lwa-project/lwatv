@@ -1,0 +1,14 @@
+These images show a simulation of the sky above the first LWA station. They update every 10 minutes and show where the beamformed observations are pointing.  Each beam is represented by two circles, one for each of the frequencies being observed, and up to four beams can be used simultaneously.  The text to the upper right of the shows which LWA projects are using which beams.
+
+We've labeled the brightest objects in the sky: 
+Cas A -- a supernova remnant 
+Vir A -- a supergiant elliptical galaxy also known as M87 
+Tau A -- the Crab Nebula, a supernova remnant 
+Cyg A -- a bright radio galaxy in the constellation of Cygnus
+Jupiter -- Jupiter, which only can be seen when it is bursting 
+Sun -- the Sun, which can become so bright that it wipes out everything else in the image! 
+Dotted line -- the plane of our galaxy 
+Sgr A -- the center of our galaxy
+Her A -- another bright radio galaxy in the constellation of Hercules
+For A -- another bright radio galaxy in the constellation of Fornax
+
