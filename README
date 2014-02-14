@@ -14,8 +14,12 @@ consists of four parts:
      movies.
 
 This script uses wxPython and GStreamer 1.0 for generating the GUI and 
-displaying the images.  For GStreamer 0.10 installs, you can build 
-lwaTV2.py (see the build2.sh script below).
+displaying the images.
+
+lwaTV2.py
+---------
+Version of the lwaTV3.py script for GStreamer 0.10 installs (built using 
+the build2.sh script described below).
 
 updateMovies.py
 ---------------

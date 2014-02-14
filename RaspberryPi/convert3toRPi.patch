@@ -6,7 +6,3 @@
 > 		
 > 		vs = Gst.ElementFactory.make("ximagesink", None)
 > 		self.player.set_property("video-sink", vs)
-333c333
-< 			
----
-> 		

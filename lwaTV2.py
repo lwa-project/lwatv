@@ -3,7 +3,7 @@
 
 
 """
-Version 3 of a GUI application to show LWATV (gstreamer 1.0).
+Version 2 of a GUI application to show LWATV (gstreamer 0.10).
 """
 
 import os
@@ -30,13 +30,12 @@ if sys.platform.startswith('linux'):
 	except:
 		pass
 		
-import gi
-gi.require_version('Gst', '1.0')
-from gi.repository import GObject, Gst
-from gi.repository import GstVideo
+import pygst
+pygst.require("0.10")
+import gst
 
-GObject.threads_init()
-Gst.init(None)
+import gobject
+gobject.threads_init()
 
 
 def usage(exitCode=None):
@@ -122,32 +121,30 @@ class MoviePlayer(wx.Panel):
 		self.SetBackgroundColour(wx.BLACK)
 		self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
 		
-		self.pipeline = Gst.Pipeline()
-		self.player = Gst.ElementFactory.make("playbin", None)
-		bus = self.pipeline.get_bus()
+		self.player = gst.element_factory_make("playbin2", "player")
+		bus = self.player.get_bus()
 		bus.add_signal_watch()
 		bus.enable_sync_message_emission()
 		bus.connect('message::eos', self.on_eos_message)
 		bus.connect('message::error', self.on_error_message)
 		bus.connect('sync-message::element', self.on_sync_message)
-		self.pipeline.add(self.player)
 		if sys.platform == 'darwin':
-			vs = Gst.ElementFactory.make("ximagesink", None)
+			vs = gst.element_factory_make("ximagesink", None)
 			self.player.set_property("video-sink", vs)
 			
 	def on_eos_message(self, bus, message):
 		if self.verbose:
 			print "Finished movie"
-		self.pipeline.set_state(Gst.State.NULL)
+		self.player.set_state(gst.STATE_NULL)
 		
 	def on_error_message(self, bus, message):
 		print "Error %s: %s" % message.parse_error()
 		
 	def on_sync_message(self, bus, message):
-		if message.get_structure().get_name() == 'prepare-window-handle':
+		if message.structure.get_name() == 'prepare-xwindow-id':
 			message.src.set_property('force-aspect-ratio', True)
-			message.src.set_window_handle(self.GetHandle())
-			
+			message.src.set_xwindow_id(self.GetHandle())
+		
 	def get_movie(self):
 		movies = glob.glob(os.path.join(self.moviePath, '*.mov'))
 		movies.sort()
@@ -159,10 +156,10 @@ class MoviePlayer(wx.Panel):
 		
 	def update(self):
 		isPlaying = False
-		for state in self.pipeline.get_state(0):
-			if type(state) != type(Gst.State.PLAYING):
+		for state in self.player.get_state():
+			if type(state) != type(gst.STATE_PLAYING):
 				continue
-			if state == Gst.State.PLAYING:
+			if state == gst.STATE_PLAYING:
 				isPlaying = True
 				break
 		
@@ -179,15 +176,16 @@ class MoviePlayer(wx.Panel):
 			datestr = "%s %i, %i" % (mn, dy, yr)
 			self.label.SetLabel("Movie for %s" % datestr)		
 			
-			self.pipeline.set_state(Gst.State.NULL)
+			self.player.set_state(gst.STATE_NULL)
 			self.player.set_property('uri', "file://%s" % movie)
-			self.pipeline.set_state(Gst.State.PLAYING)
+			self.player.set_state(gst.STATE_PLAYING)
 			
 	def stop(self):
-		self.pipeline.set_state(Gst.State.NULL)
+		self.player.set_state(gst.STATE_NULL)
 
 
 LATEST_TIMER = 101
+
 MOVIE_TIMER = 102
 
 class LWATV(wx.Frame):

@@ -91,6 +91,16 @@ def parseOptions(args):
 		else:
 			assert False
 			
+	# Check for movies
+	basePath = os.path.dirname(os.path.abspath(__file__))
+	moviePath = os.path.join(basePath, 'movies')
+	movies = glob.glob(os.path.join(moviePath, '*.mov'))
+	if len(movies) == 0:
+		print "WARNING: No movies found under 'movies/', disabling movie panel."
+		print "         To enable the movie panel, run 'updateMovies.py' and   "
+		print "         restart this script.                                   "
+		config['enableMovie'] = False
+		
 	# Return configuration
 	return config
 
@@ -330,7 +340,7 @@ class LWATV(wx.Frame):
 		self.latestTimer.Start(lift)
 		if self.config['enableMovie']:
 			self.movieTimer.Start(7000)
-		
+			
 	def onSize(self, event):
 		self.panel.Layout()
 		self.Layout()

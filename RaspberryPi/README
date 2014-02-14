@@ -6,7 +6,7 @@ and the files necessary to get it running under Raspbian.
 lwaTV3.rpi.py
 -------------
 Version of the lwaTV3.py script tuned for the RPi (built using the 
-buildRPi.sh described below).
+buildRPi.sh script described below).
 
 build2.sh
 ---------
