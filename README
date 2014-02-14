@@ -44,3 +44,6 @@ movies
 Directory containing the pre-recorded LWATV movies.  This directory needs
 to be populated by a call to updateMovies.py.
 
+RaspberryPi
+-----------
+Raspberry Pi-specific version of lwaTV3.py.
