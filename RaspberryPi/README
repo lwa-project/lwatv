@@ -30,12 +30,13 @@ movies
 Directory containing the pre-recorded LWATV movies.  This directory needs
 to be populated by a call to updateMovies.py.
 
-dpkg_list.txt
--------------
-List of all packages installed on the testbed RPi needed by lwaTV3.rpi.py.
-This list was generated using the `dpkg -l` command.
-
-sources_list.txt
-----------------
-File describing the apt sources needed on the RPi under Raspbian to get 
-GStreamer 1.0 and the omx plugin.
+setup
+-----
+Directory containing various bits of information on the raspbian setup.
+Including:
+  * config.txt - Example /boot/config.txt file.
+  * dpkg_list.txt -  List of all packages installed on the testbed RPi needed by 
+                     lwaTV3.rpi.py.  This list was generated using the `dpkg -l` 
+                     command.
+  * sources_list.txt - File describing the apt sources needed on the RPi under 
+                       Raspbian to get GStreamer 1.0 and the omx plugin.

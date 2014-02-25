@@ -521,6 +521,9 @@ if __name__ == "__main__":
 	
 	print "Starting %s with PID %i" % (os.path.basename(__file__), os.getpid())
 	
+	# Suppress various error popups
+	wx.Log_EnableLogging(False)
+	
 	app = wx.App()
 	LWATV(None, title="LWATV GUI", config=config)
 	app.MainLoop()
