@@ -141,7 +141,8 @@ class MoviePlayer(wx.Panel):
 		self.pipeline.set_state(Gst.State.NULL)
 		
 	def on_error_message(self, bus, message):
-		print "Error %s: %s" % message.parse_error()
+		err, debug = message.parse_error()
+		print "Error %s: %s" % (err, debug)
 		
 	def on_sync_message(self, bus, message):
 		if message.get_structure().get_name() == 'prepare-window-handle':
@@ -349,6 +350,7 @@ class LWATV(wx.Frame):
 		
 		self.updateLatestImage()
 		self.updateStationImage()
+		self.updateTextSize()
 		
 	def onPaint(self, event):
 		self.panel.Layout()
@@ -513,6 +515,22 @@ class LWATV(wx.Frame):
 			self.descriptionText.SetValue(self.imageDescriptionLWATV)
 		else:
 			self.descriptionText.SetValue(self.imageDescriptionBeams)
+			
+	def updateTextSize(self):
+		# Get the area of the text box
+		w,h = self.descriptionText.GetSize()
+		ta = w*h
+		
+		# Get the base font
+		font = wx.SystemSettings_GetFont(wx.SYS_SYSTEM_FONT)
+		
+		# Find the "right" font size to use and use it
+		def area2points(area, text):
+			points = math.sqrt(area/(1.5*len(text)))
+			points = math.floor(points)
+			return int(points)
+		font.SetPointSize( area2points(ta, self.descriptionText.GetValue()) )
+		self.descriptionText.SetFont(font)
 
 
 if __name__ == "__main__":
