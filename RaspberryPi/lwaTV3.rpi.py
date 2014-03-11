@@ -11,6 +11,7 @@ import wx
 import sys
 import copy
 import glob
+import math
 import time
 import getopt
 import random
