@@ -517,7 +517,7 @@ class LWATV(wx.Frame):
 		else:
 			self.descriptionText.SetValue(self.imageDescriptionBeams)
 		wx.CallAfter(self.updateTextSize)
-			
+		
 	def updateTextSize(self):
 		# Get the area of the text box
 		w,h = self.descriptionText.GetSize()
