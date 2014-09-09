@@ -77,7 +77,7 @@ def parseOptions(args):
 		print str(err) # will print something like "option -a not recognized"
 		usage(exitCode=2)
 		
-	 # Work through opts
+	# Work through opts
 	for opt, value in opts:
 		if opt in ('-h', '--help'):
 			usage(exitCode=0)
@@ -167,7 +167,7 @@ class MoviePlayer(wx.Panel):
 			if state == Gst.State.PLAYING:
 				isPlaying = True
 				break
-		
+				
 		if not isPlaying:
 			movie = self.get_movie()
 			movieBase = os.path.basename(movie)
@@ -215,7 +215,8 @@ class LWATV(wx.Frame):
 			
 		# Update
 		self.initImages()
-			
+		self.updateTextSize()
+		
 	def initUI(self):	
 		panel = wx.Panel(self, -1)
 		panel.SetForegroundColour(wx.WHITE)
@@ -313,8 +314,8 @@ class LWATV(wx.Frame):
 		self.Bind(wx.EVT_PAINT, self.onPaint)
 		self.latestImage.Bind(wx.EVT_PAINT, self.onPaint)
 		self.stationImage.Bind(wx.EVT_PAINT, self.onPaint)
-		#if self.config['enableMovie']:
-		#	self.previousMovie.Bind(wx.EVT_PAINT, self.previousMovie.Update)
+		if self.config['enableMovie']:
+			self.previousMovie.Bind(wx.EVT_PAINT, self.previousMovie.Update)
 			
 		# Window manager close
 		self.Bind(wx.EVT_CLOSE, self.onQuit)

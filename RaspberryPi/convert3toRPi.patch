@@ -1,4 +1,4 @@
-124,126c124,126
+135,137c135,137
 < 		if sys.platform == 'darwin':
 < 			vs = Gst.ElementFactory.make("ximagesink", None)
 < 			self.player.set_property("video-sink", vs)
@@ -6,3 +6,9 @@
 > 		
 > 		vs = Gst.ElementFactory.make("ximagesink", None)
 > 		self.player.set_property("video-sink", vs)
+317,318c317,318
+< 		#if self.config['enableMovie']:
+< 		#	self.previousMovie.Bind(wx.EVT_PAINT, self.previousMovie.Update)
+---
+> 		if self.config['enableMovie']:
+> 			self.previousMovie.Bind(wx.EVT_PAINT, self.previousMovie.Update)
