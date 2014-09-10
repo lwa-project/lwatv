@@ -6,9 +6,3 @@
 > 		
 > 		vs = Gst.ElementFactory.make("ximagesink", None)
 > 		self.player.set_property("video-sink", vs)
-317,318c317,318
-< 		#if self.config['enableMovie']:
-< 		#	self.previousMovie.Bind(wx.EVT_PAINT, self.previousMovie.Update)
----
-> 		if self.config['enableMovie']:
-> 			self.previousMovie.Bind(wx.EVT_PAINT, self.previousMovie.Update)

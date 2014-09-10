@@ -141,6 +141,8 @@ class MoviePlayer(wx.Panel):
 			print "Finished movie"
 		self.pipeline.set_state(Gst.State.NULL)
 		
+		self.update()
+		
 	def on_error_message(self, bus, message):
 		err, debug = message.parse_error()
 		print "Error %s: %s" % (err, debug)
@@ -314,9 +316,7 @@ class LWATV(wx.Frame):
 		self.Bind(wx.EVT_PAINT, self.onPaint)
 		self.latestImage.Bind(wx.EVT_PAINT, self.onPaint)
 		self.stationImage.Bind(wx.EVT_PAINT, self.onPaint)
-		#if self.config['enableMovie']:
-		#	self.previousMovie.Bind(wx.EVT_PAINT, self.previousMovie.Update)
-			
+		
 		# Window manager close
 		self.Bind(wx.EVT_CLOSE, self.onQuit)
 		
@@ -324,11 +324,7 @@ class LWATV(wx.Frame):
 		## Latest Image
 		self.latestTimer = wx.Timer(self, LATEST_TIMER)
 		wx.EVT_TIMER(self, LATEST_TIMER, self.updateLatestImage)
-		if self.config['enableMovie']:
-			## Movie changes
-			self.movieTimer = wx.Timer(self, MOVIE_TIMER)
-			wx.EVT_TIMER(self, MOVIE_TIMER, self.updatePreviousMovie)
-			
+		
 	def initImages(self):
 		# Update the images, movie, and text
 		self.updateLatestImage()
@@ -342,7 +338,7 @@ class LWATV(wx.Frame):
 			lift = 5000
 		self.latestTimer.Start(lift)
 		if self.config['enableMovie']:
-			self.movieTimer.Start(7000)
+			wx.CallAfter(self.updatePreviousMovie)
 			
 	def onSize(self, event):
 		self.panel.Layout()
@@ -355,8 +351,6 @@ class LWATV(wx.Frame):
 		self.updateTextSize()
 		
 	def onPaint(self, event):
-		self.panel.Layout()
-		self.Layout()
 		self.panel.Update()
 		self.Update()
 		
@@ -366,7 +360,6 @@ class LWATV(wx.Frame):
 	def onQuit(self, event):
 		self.latestTimer.Stop()
 		if self.config['enableMovie']:
-			self.movieTimer.Stop()
 			self.previousMovie.stop()
 		self.Destroy()
 		
