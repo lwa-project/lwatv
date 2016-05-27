@@ -39,6 +39,7 @@ Options:
 -d, --days              Number of days to cache (default = 7)
 -v, --verbose           Display status messages
 -q, --query             Query the cache
+-2, --lwatv2            Update movies from LWA-SV (default is LWA1)
 """
 	
 	if exitCode is not None:
@@ -53,6 +54,7 @@ def parseOptions(args):
 	config['daysToCache'] = 7		# Days worth of movies to cache
 	config['verbose'] = False		# Enable print status messages to the terminal
 	config['queryCache'] = False		# Query the current disk cache
+	config['station'] = 'LWA1'		# Which station to show data from
 	
 	# Read in a process the command line flags
 	try:
@@ -72,6 +74,8 @@ def parseOptions(args):
 			config['verbose'] = True
 		elif opt in('-q', '--query'):
 			config['queryCache'] = True
+		elif opt in ('-2', '--lwatv2'):
+			config['station'] = 'LWA-SV'
 		else:
 			assert False
 			
@@ -146,7 +150,10 @@ def main(args):
 		if config['verbose']:
 			print "%i movie(s) will be downloaded" % len(toDownload)
 		for movie in toDownload:
-			url = 'http://lwalab.phys.unm.edu/lwatv/%s' % movie
+			if config['station'] == 'LWA-SV':
+				url = 'http://lwalab.phys.unm.edu/lwatv2/%s' % movie
+			else:
+				url = 'http://lwalab.phys.unm.edu/lwatv/%s' % movie
 			if config['verbose']:
 				print "Downloading '%s'..." % url
 				

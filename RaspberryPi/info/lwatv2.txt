@@ -1,0 +1,15 @@
+These images show the sky above the second LWA station. They update every few seconds and, if the image isn't updating right now, it's probably because we are running beamformed observations, which we do for many hours every day.
+
+Each image shows the full sky, down to the horizon at the image's edge. The left shows the total intensity, and the right shows the intensity of circularly polarized radio waves. At the upper left you can see the average time of the data that went into the image (given in UTC, which is basically the same as Greenwich Mean Time). There is no time gap between the images: we are imaging sky in real time with a 100% duty cycle. At the upper right is the central frequency of the image. In the center is a 100 kHz bandwidth spectrum from a single antenna and polarization; the images are produced from the middle 75 kHz.
+
+Finally, we've labeled the brightest objects in the sky: 
+Cas A -- a supernova remnant 
+Vir A -- a supergiant elliptical galaxy also known as M87 
+Tau A -- the Crab Nebula, a supernova remnant 
+Cyg A -- a bright radio galaxy 
+Jup -- Jupiter, which only can be seen when it is bursting 
+Sun -- the Sun, which can become so bright that it wipes out everything else in the image! 
+Dashed line -- the plane of our galaxy 
+GC -- the center of our galaxy
+
+Of course, there will sometimes be points in our image other than these labeled ones! Most of these are due to radio frequency interference (RFI): radio emissions from sources other than the sky. The sky will sometimes be wiped out by bright RFI, particularly at low frequencies and during the day. However, some blips just may be something new: flares from Hot Jupiters or magnetars; radio counterparts to gamma-ray bursts; or something totally new and unexpected. Our computers will be monitoring these movies to let us know when something unusual pops up!
