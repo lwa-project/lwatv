@@ -51,6 +51,7 @@ Options:
 -d, --disable-movie     Disable playing old movies
 -n, --disable-maximize  Disable automatic maximization of the window
 -v, --verbose           Display GUI status messages
+-2, --lwatv2            Show data from LWA-SV (default is LWA1)
 """ % (os.path.basename(__file__), os.path.basename(__file__))
 	
 	if exitCode is not None:
@@ -62,16 +63,17 @@ Options:
 def parseOptions(args):
 	config = {}
 	# Defaults
-	config['fadeTime'] = 1.5						# Fade time between LWATV images
-	config['enableFade'] = False					# Enable fading between LWATV images
-	config['enableMovie'] = True					# Enable the display of pre-recorded movies
+	config['fadeTime'] = 1.5				# Fade time between LWATV images
+	config['enableFade'] = False				# Enable fading between LWATV images
+	config['enableMovie'] = True				# Enable the display of pre-recorded movies
 	config['enableMaximize'] = True				# Enable auto. window maximization on start
-	config['verbose'] = False					# Enable print GUI status messages to the terminal
+	config['verbose'] = False				# Enable print GUI status messages to the terminal
+	config['station'] = 'LWA1'				# Which station to show data from
 	config['imageQuality'] = wx.IMAGE_QUALITY_NORMAL 	# wxImage resampling quality
 	
 	# Read in a process the command line flags
 	try:
-		opts, args = getopt.getopt(args, "hfdnv", ["help", "enable-fade", "disable-movie", "disable-maximize", "verbose"])
+		opts, args = getopt.getopt(args, "hfdnv2", ["help", "enable-fade", "disable-movie", "disable-maximize", "verbose", "lwatv2"])
 	except getopt.GetoptError, err:
 		# Print help information and exit:
 		print str(err) # will print something like "option -a not recognized"
@@ -89,6 +91,8 @@ def parseOptions(args):
 			config['enableMaximize'] = False
 		elif opt in ('-v', '--verbose'):
 			config['verbose'] = True
+		elif opt in ('-2', '--lwatv2'):
+			config['station'] = 'LWA-SV'
 		else:
 			assert False
 			
@@ -252,7 +256,10 @@ class LWATV(wx.Frame):
 		else:
 			siw = iw
 		## Label
-		stationText = wx.StaticText(panel, label="The LWA1 Site Located By the VLA")
+		if self.config['station'] == 'LWA-SV':
+			stationText = wx.StaticText(panel, label="The LWA-SV Site Located on the Sevilleta NWR")
+		else:
+			stationText = wx.StaticText(panel, label="The LWA1 Site Located By the VLA")
 		stationText.SetFont(font)
 		stationText.SetForegroundColour(wx.WHITE)
 		stationText.SetBackgroundColour(wx.BLACK)
@@ -288,7 +295,7 @@ class LWATV(wx.Frame):
 		self.descriptionText.SetBackgroundColour(wx.BLACK)
 		sizer.Add(self.descriptionText, (1, iw), (ih, tw), wx.EXPAND|wx.ALL, 10)
 		## LWA1 Label
-		lwa1Label = wx.StaticText(panel, label="Copyright (c) 2014 The LWA Consortium")
+		lwa1Label = wx.StaticText(panel, label="Copyright (c) 2016 The LWA Consortium")
 		lwa1Label.SetForegroundColour(wx.WHITE)
 		lwa1Label.SetBackgroundColour(wx.BLACK)
 		sizer.Add(lwa1Label, (2+ih, iw), (1, tw), wx.ALIGN_CENTER|wx.ALIGN_CENTER_VERTICAL|wx.ALL, 4)
@@ -364,15 +371,22 @@ class LWATV(wx.Frame):
 		self.Destroy()
 		
 	def loadStationImage(self):
-		fh = open(os.path.join(self.imagePath, 'lwa1.jpg'), 'r')
+		if self.config['station'] == 'LWA-SV':
+			fh = open(os.path.join(self.imagePath, 'lwasv.jpg'), 'r')
+		else:
+			fh = open(os.path.join(self.imagePath, 'lwa1.jpg'), 'r')
 		data = fh.read()
 		fh.close()
 		
 		self.wxStationImage = wx.ImageFromStream(StringIO(data))
 		
 	def loadLatestImage(self):
-		url = 'http://lwalab.phys.unm.edu/lwatv/lwatv.png?lwatvgui=%s' % int(time.time())
-		urlAlt = 'http://lwalab.phys.unm.edu/lwatv/beamPointings.png?lwatvgui=%s' % int(time.time())
+		if self.config['station'] == 'LWA-SV':
+			url = 'http://lwalab.phys.unm.edu/lwatv2/lwatv.png?lwatvgui=%s' % int(time.time())
+			urlAlt = 'http://lwalab.phys.unm.edu/lwatv2/beamPointings.png?lwatvgui=%s' % int(time.time())
+		else:
+			url = 'http://lwalab.phys.unm.edu/lwatv/lwatv.png?lwatvgui=%s' % int(time.time())
+			urlAlt = 'http://lwalab.phys.unm.edu/lwatv/beamPointings.png?lwatvgui=%s' % int(time.time())
 		
 		latestResult = "Download at %s" % url
 		try:
@@ -393,13 +407,16 @@ class LWATV(wx.Frame):
 				data = fh.read()
 				fh.close()
 				
-				latestResult = latestResult+" -> PASI is not currently running"
+				latestResult = latestResult+" -> LASI is not currently running"
 				
 				self.config['imageMode'] = 'Beams'
 				self.latestText.SetLabel("Current Beam Pointings")
 			else:
 				self.config['imageMode'] = 'LWATV'
-				self.latestText.SetLabel("Latest LWATV Image")
+				if self.config['station'] == 'LWA-SV':
+					self.latestText.SetLabel("Latest LWATV2 Image")
+				else:
+					self.latestText.SetLabel("Latest LWATV Image")
 				
 		except:
 			# Deal with network/download errors
@@ -420,7 +437,10 @@ class LWATV(wx.Frame):
 			self.pilLatestImage = self.pilLatestImage.convert('RGB')
 			
 	def loadImageDescription(self):
-		fh = open(os.path.join(self.infoPath, 'lwatv.txt'))
+		if self.config['station'] == 'LWA-SV':
+			fh = open(os.path.join(self.infoPath, 'lwatv2.txt'))
+		else:
+			fh = open(os.path.join(self.infoPath, 'lwatv.txt'))
 		data1 = fh.read()
 		fh.close()
 		
