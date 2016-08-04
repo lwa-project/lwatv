@@ -58,7 +58,7 @@ def parseOptions(args):
 	
 	# Read in a process the command line flags
 	try:
-		opts, args = getopt.getopt(args, "hd:vq", ["help", "days=", "verbose", "query"])
+		opts, args = getopt.getopt(args, "hd:vq2", ["help", "days=", "verbose", "query", "lwatv2"])
 	except getopt.GetoptError, err:
 		# Print help information and exit:
 		print str(err) # will print something like "option -a not recognized"
