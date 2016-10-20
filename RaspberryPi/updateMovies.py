@@ -36,7 +36,7 @@ Usage: updateMovies.py [OPTIONS]
 
 Options:
 -h, --help              Display this help information
--d, --days              Number of days to cache (default = 7)
+-d, --days              Number of days to cache (default = 5)
 -v, --verbose           Display status messages
 -q, --query             Query the cache
 -2, --lwatv2            Update movies from LWA-SV (default is LWA1)
@@ -51,7 +51,7 @@ Options:
 def parseOptions(args):
 	config = {}
 	# Defaults
-	config['daysToCache'] = 7		# Days worth of movies to cache
+	config['daysToCache'] = 5		# Days worth of movies to cache
 	config['verbose'] = False		# Enable print status messages to the terminal
 	config['queryCache'] = False		# Query the current disk cache
 	config['station'] = 'LWA1'		# Which station to show data from
