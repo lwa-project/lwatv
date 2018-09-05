@@ -232,7 +232,7 @@ class LWATV(wx.Frame):
         tw = 2
         iflags = wx.EXPAND|wx.ALIGN_CENTER|wx.ALIGN_CENTER_VERTICAL|wx.LEFT|wx.RIGHT
         
-        font = wx.SystemSettings_GetFont(wx.SYS_SYSTEM_FONT)
+        font = wx.SystemSettings.GetFont(wx.SYS_SYSTEM_FONT)
         font.SetPointSize(font.GetPointSize()+2)
         
         # Latest LWATV Image
@@ -536,7 +536,7 @@ class LWATV(wx.Frame):
         ta = w*h
         
         # Get the base font
-        font = wx.SystemSettings_GetFont(wx.SYS_SYSTEM_FONT)
+        font = wx.SystemSettings.GetFont(wx.SYS_SYSTEM_FONT)
         
         # Find the "right" font size to use and use it
         def area2points(area, text):
