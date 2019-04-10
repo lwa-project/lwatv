@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Build the RPi version of lwaTV3.py
-patch ../lwaTV3.py -o lwaTV3.rpi.py <convert3toRPi.patch
+cp ../lwaTV3.py lwaTV3.rpi.py
+patch lwaTV3.rpi.py <convert3toRPi.patch
 perms=`stat -c '%a' ../lwaTV3.py `
 chmod ${perms} lwaTV3.rpi.py
 

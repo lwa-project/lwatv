@@ -33,11 +33,24 @@ if sys.platform.startswith('linux'):
         
 import gi
 gi.require_version('Gst', '1.0')
+gi.require_version('GstVideo', '1.0')
 from gi.repository import GObject, Gst
 from gi.repository import GstVideo
 
 GObject.threads_init()
 Gst.init(None)
+
+# Deal with the different wxPython versions
+if 'phoenix' in wx.PlatformInfo:
+    EnableLogging = wx.Log.EnableLogging
+    ClientDC = wx.ClientDC
+    Image = wx.Image
+    Bitmap = wx.Bitmap
+else:
+    EnableLogging = wx.Log_EnableLogging
+    ClientDC = wx.AutoBufferedPaintDC
+    Image = wx.ImageFromStream
+    Bitmap = wx.BitmapFromImage
 
 
 def usage(exitCode=None):
@@ -291,8 +304,9 @@ class LWATV(wx.Frame):
         sizer.Add(descriptionLabel, (0, iw), (1, tw), wx.ALIGN_CENTER|wx.ALIGN_CENTER_VERTICAL|wx.ALL, 4)
         ## Content
         self.descriptionText =  wx.TextCtrl(panel, -1, "Image description here.", style=wx.TE_MULTILINE|wx.TE_READONLY)
-        self.descriptionText.SetForegroundColour(wx.WHITE)
-        self.descriptionText.SetBackgroundColour(wx.BLACK)
+        if sys.platform != 'darwin':
+            self.descriptionText.SetForegroundColour(wx.WHITE)
+            self.descriptionText.SetBackgroundColour(wx.BLACK)
         sizer.Add(self.descriptionText, (1, iw), (ih, tw), wx.EXPAND|wx.ALL, 10)
         ## LWA1 Label
         lwa1Label = wx.StaticText(panel, label="Copyright (c) 2016 The LWA Consortium")
@@ -330,7 +344,7 @@ class LWATV(wx.Frame):
         # Timers
         ## Latest Image
         self.latestTimer = wx.Timer(self, LATEST_TIMER)
-        wx.EVT_TIMER(self, LATEST_TIMER, self.updateLatestImage)
+        self.Bind(wx.EVT_TIMER, self.updateLatestImage)
         
     def initImages(self):
         # Update the images, movie, and text
@@ -378,7 +392,7 @@ class LWATV(wx.Frame):
         data = fh.read()
         fh.close()
         
-        self.wxStationImage = wx.ImageFromStream(StringIO(data))
+        self.wxStationImage = Image(StringIO(data))
         
     def loadLatestImage(self):
         if self.config['station'] == 'LWA-SV':
@@ -429,7 +443,7 @@ class LWATV(wx.Frame):
             
         if self.config['verbose']:
             print latestResult
-        self.wxLatestImage = wx.ImageFromStream(StringIO(data))
+        self.wxLatestImage = Image(StringIO(data))
         
         if self.config['enableFade']:
             self.pilLatestImageTime = time.time()
@@ -468,9 +482,9 @@ class LWATV(wx.Frame):
         image = self.wxStationImage.Scale(w, h, self.config['imageQuality'])
         w2, h2 = self.stationImage.GetSize()
         image.Resize(self.stationImage.GetSize(), ((w2-w)/2, (h2-h)/2), 0, 0, 0)
-        bitmap = wx.BitmapFromImage(image)
+        bitmap = Bitmap(image)
         
-        dc = wx.AutoBufferedPaintDC(self.stationImage)
+        dc = ClientDC(self.stationImage)
         dc.DrawBitmap(bitmap, 0, 0)
         
     def updateLatestImage(self, event=None, fade=False):
@@ -509,9 +523,9 @@ class LWATV(wx.Frame):
         image = wxImage.Scale(w, h, self.config['imageQuality'])
         w2, h2 = self.latestImage.GetSize()
         image.Resize(self.latestImage.GetSize(), ((w2-w)/2, (h2-h)/2), 0, 0, 0)
-        bitmap = wx.BitmapFromImage(image)
+        bitmap = Bitmap(image)
         
-        dc = wx.AutoBufferedPaintDC(self.latestImage)
+        dc = ClientDC(self.latestImage)
         dc.DrawBitmap(bitmap, 0, 0)
         
         if oldMode != self.config['imageMode']:
@@ -556,7 +570,7 @@ if __name__ == "__main__":
     print "Starting %s with PID %i" % (os.path.basename(__file__), os.getpid())
     
     # Suppress various error popups
-    wx.Log_EnableLogging(False)
+    EnableLogging(False)
     
     app = wx.App()
     LWATV(None, title="LWATV GUI", config=config)

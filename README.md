@@ -16,23 +16,9 @@ consists of four parts:
 This script uses wxPython and GStreamer 1.0 for generating the GUI and 
 displaying the images.
 
-lwaTV2.py
----------
-Version of the lwaTV3.py script for GStreamer 0.10 installs (built using 
-the build2.sh script described below).
-
 updateMovies.py
 ---------------
 Script to update the on-disk cache of pre-recorded LWATV movies.
-
-build2.sh
----------
-Script to build lwaTV2.py, a GStreamer 0.10-compatiable version of 
-lwaTV3.py.
-
-convert3to2.patch
------------------
-Patch file used by build2.sh to convert from GStreamer 1.0 to 0.10.
 
 images
 ------
