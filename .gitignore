@@ -1,1 +1,6 @@
+# movie directories
 movies/*
+RaspberryPi/movies/*
+
+# patch residuals
+RaspberryPi/lwaTV3.rpi.py.orig
