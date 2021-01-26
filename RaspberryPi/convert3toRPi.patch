@@ -1,4 +1,4 @@
-152,154c152,154
+77,79c77,79
 <         if sys.platform == 'darwin':
 <             vs = Gst.ElementFactory.make("ximagesink", None)
 <             self.player.set_property("video-sink", vs)
