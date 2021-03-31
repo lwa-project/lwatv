@@ -29,6 +29,11 @@ _CHUNK_SIZE = 1024**2
 
 
 def main(args):
+    # Make sure there is a movie directory
+    if not os.path.exists(_MOVIE_PATH):
+        print("%s not found, creating directory" % _MOVIE_PATH)
+        os.mkdir(_MOVIE_PATH)
+        
     if args.query:
         # Report on disk usage
         movies = []
