@@ -33,9 +33,19 @@ Setting Up the LWATV GUI on Raspbian
 To create a dedicated LWATV display there are a few additional steps needed to setup the RPi:
  
  1. Make sure the RPi is setup to automatically login to the LXDE desktop.
- 2. Add a `lwatv.desktop` file into `/home/pi/.config/autostart`:
+ 2. Make sure that the screensaver is diabled by changing the settings in Preferences->Screensaver.
+ 3. Add a `lwatv.desktop` file into `/home/pi/.config/autostart`:
     ```
-    Stuff
+    [Desktop Entry]
+    Type=Application
+    Name=LWATV GUI
+    Comment=The LWATV GUI
+    Terminal=false
+    StartupNotify=false
+    Exec=sh -c "sleep 10 && python3 /home/pi/LWATV/RaspberryPi/lwaTV3.rpi.py"
     ```
-    
+    which will be used by LXDE to start the GUI on login
+ 4. Add the following line to the pi user's crontab to help update the movies every day at 5:10 local time:
+    ```
+    10 5 * * * /home/pi/LWATV/RaspberryPi/updateMovies.py
     ```
