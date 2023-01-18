@@ -1,7 +1,7 @@
 RaspberryPi
 ===========
 Version of the lwaTV3.py script that runs on the Raspberry Pi Model B (RPi)
-and the files necessary to get it running under Raspbian.
+and the files necessary to get it running under Raspberry Pi OS.
 
 lwaTV3.rpi.py
 -------------
@@ -32,11 +32,5 @@ to be populated by a call to updateMovies.py.
 
 setup
 -----
-Directory containing various bits of information on the raspbian setup.
-Including:
-  * config.txt - Example /boot/config.txt file.
-  * dpkg_list.txt -  List of all packages installed on the testbed RPi needed by 
-                     lwaTV3.rpi.py.  This list was generated using the `dpkg -l` 
-                     command.
-  * sources_list.txt - File describing the apt sources needed on the RPi under 
-                       Raspbian to get GStreamer 1.0 and the omx plugin.
+Directory containing another README.md file with more information about how
+to turn a RPi into a stand alone LWATV display.

@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
+#!/usr/bin/env python3
 
 """
 Version 3 of a GUI application to show LWATV (gstreamer 1.0).
@@ -13,15 +11,12 @@ import copy
 import glob
 import math
 import time
-import getopt
 import random
-import urllib2
+import argparse
+from urllib.request import urlopen
 from datetime import datetime
 from PIL import Image as PImage
-try:
-    from cStringIO import StringIO
-except ImportError:
-    from StringIO import StringIO
+from io import BytesIO
     
 if sys.platform.startswith('linux'):
     import ctypes
@@ -51,76 +46,6 @@ else:
     ClientDC = wx.AutoBufferedPaintDC
     Image = wx.ImageFromStream
     Bitmap = wx.BitmapFromImage
-
-
-def usage(exitCode=None):
-    print """%s - GUI for displaying the contents of LWATV in an educational setting.
-
-Usage: %s [OPTIONS]
-
-Options:
--h, --help              Display this help information
--f, --enable-fade       Enable the LWATV latest image fade effect
--d, --disable-movie     Disable playing old movies
--n, --disable-maximize  Disable automatic maximization of the window
--v, --verbose           Display GUI status messages
--2, --lwatv2            Show data from LWA-SV (default is LWA1)
-""" % (os.path.basename(__file__), os.path.basename(__file__))
-    
-    if exitCode is not None:
-        sys.exit(exitCode)
-    else:
-        return True
-
-
-def parseOptions(args):
-    config = {}
-    # Defaults
-    config['fadeTime'] = 1.5				# Fade time between LWATV images
-    config['enableFade'] = False				# Enable fading between LWATV images
-    config['enableMovie'] = True				# Enable the display of pre-recorded movies
-    config['enableMaximize'] = True				# Enable auto. window maximization on start
-    config['verbose'] = False				# Enable print GUI status messages to the terminal
-    config['station'] = 'LWA1'				# Which station to show data from
-    config['imageQuality'] = wx.IMAGE_QUALITY_NORMAL 	# wxImage resampling quality
-    
-    # Read in a process the command line flags
-    try:
-        opts, args = getopt.getopt(args, "hfdnv2", ["help", "enable-fade", "disable-movie", "disable-maximize", "verbose", "lwatv2"])
-    except getopt.GetoptError, err:
-        # Print help information and exit:
-        print str(err) # will print something like "option -a not recognized"
-        usage(exitCode=2)
-        
-    # Work through opts
-    for opt, value in opts:
-        if opt in ('-h', '--help'):
-            usage(exitCode=0)
-        elif opt in ('-f', '--enable-fade'):
-            config['enableFade'] = True
-        elif opt in ('-d', '--disable-movie'):
-            config['enableMovie'] = False
-        elif opt in ('-n' '--disable-maximize'):
-            config['enableMaximize'] = False
-        elif opt in ('-v', '--verbose'):
-            config['verbose'] = True
-        elif opt in ('-2', '--lwatv2'):
-            config['station'] = 'LWA-SV'
-        else:
-            assert False
-            
-    # Check for movies
-    basePath = os.path.dirname(os.path.abspath(__file__))
-    moviePath = os.path.join(basePath, 'movies')
-    movies = glob.glob(os.path.join(moviePath, '*.mov'))
-    if len(movies) == 0:
-        print "WARNING: No movies found under 'movies/', disabling movie panel."
-        print "         To enable the movie panel, run 'updateMovies.py' and   "
-        print "         restart this script.                                   "
-        config['enableMovie'] = False
-        
-    # Return configuration
-    return config
 
 
 class MoviePlayer(wx.Panel):
@@ -155,14 +80,14 @@ class MoviePlayer(wx.Panel):
             
     def on_eos_message(self, bus, message):
         if self.verbose:
-            print "Finished movie"
+            print("Finished movie")
         self.pipeline.set_state(Gst.State.NULL)
         
         self.update()
         
     def on_error_message(self, bus, message):
         err, debug = message.parse_error()
-        print "Error %s: %s" % (err, debug)
+        print("Error %s: %s" % (err, debug))
         
     def on_sync_message(self, bus, message):
         if message.get_structure().get_name() == 'prepare-window-handle':
@@ -175,7 +100,7 @@ class MoviePlayer(wx.Panel):
         movie = random.choice(movies)
         
         if self.verbose:
-            print "Next movie is %s" % movie
+            print("Next movie is %s" % movie)
         return movie
         
     def update(self):
@@ -212,10 +137,11 @@ LATEST_TIMER = 101
 MOVIE_TIMER = 102
 
 class LWATV(wx.Frame):
-    def __init__(self, parent, title, config={}):
+    def __init__(self, parent, title, args, config={}):
         wx.Frame.__init__(self, parent, title=title, size=(1310, 840))
         
         # Configuration
+        self.args = args
         self.config = config
         self.config['imageMode'] = ''
         
@@ -229,7 +155,7 @@ class LWATV(wx.Frame):
         self.initUI()
         self.initEvents()
         self.Show()
-        if self.config['enableMaximize']:
+        if not self.args.disable_maximize:
             self.Maximize()
             
         # Update
@@ -261,15 +187,15 @@ class LWATV(wx.Frame):
         self.latestImage = wx.Panel(panel, -1)
         self.latestImage.SetBackgroundColour(wx.BLACK)
         self.latestImage.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
-        sizer.Add(self.latestImage, (1, 0), (ih/2, iw), iflags|wx.BOTTOM, 4)
+        sizer.Add(self.latestImage, (1, 0), (ih//2, iw), iflags|wx.BOTTOM, 4)
         
         # LWA1 Station Image
-        if self.config['enableMovie']:
-            siw = iw/2
+        if not self.args.disable_movie:
+            siw = iw//2
         else:
             siw = iw
         ## Label
-        if self.config['station'] == 'LWA-SV':
+        if self.args.lwatv2:
             stationText = wx.StaticText(panel, label="The LWA-SV Site Located on the Sevilleta NWR")
         else:
             stationText = wx.StaticText(panel, label="The LWA1 Site Located By the VLA")
@@ -281,19 +207,19 @@ class LWATV(wx.Frame):
         self.stationImage = wx.Panel(panel, -1)
         self.stationImage.SetBackgroundColour(wx.BLACK)
         self.stationImage.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
-        sizer.Add(self.stationImage, (2+ih/2, 0), (ih/2, siw), iflags, 4)
+        sizer.Add(self.stationImage, (2+ih//2, 0), (ih//2, siw), iflags, 4)
         
-        if self.config['enableMovie']:
+        if not self.args.disable_movie:
             # Previously Recorded Movies
             ## Label
             self.movieText = wx.StaticText(panel, label="Previous Movies")
             self.movieText.SetFont(font)
             self.movieText.SetForegroundColour(wx.WHITE)
             self.movieText.SetBackgroundColour(wx.BLACK)
-            sizer.Add(self.movieText, (2+ih, iw/2), (1, iw/2), wx.ALIGN_CENTER|wx.ALIGN_CENTER_VERTICAL|wx.ALL, 4)
+            sizer.Add(self.movieText, (2+ih, iw//2), (1, iw//2), wx.ALIGN_CENTER|wx.ALIGN_CENTER_VERTICAL|wx.ALL, 4)
             ## Movie
-            self.previousMovie = MoviePlayer(panel, self.moviePath, self.movieText, self.config['verbose'])
-            sizer.Add(self.previousMovie, (2+ih/2, iw/2), (ih/2, iw/2), iflags, 4)
+            self.previousMovie = MoviePlayer(panel, self.moviePath, self.movieText, self.args.verbose)
+            sizer.Add(self.previousMovie, (2+ih//2, iw//2), (ih//2, iw//2), iflags, 4)
             
         # Image Information
         ## Label
@@ -309,7 +235,7 @@ class LWATV(wx.Frame):
             self.descriptionText.SetBackgroundColour(wx.BLACK)
         sizer.Add(self.descriptionText, (1, iw), (ih, tw), wx.EXPAND|wx.ALL, 10)
         ## LWA1 Label
-        lwa1Label = wx.StaticText(panel, label="Copyright (c) 2016 The LWA Consortium")
+        lwa1Label = wx.StaticText(panel, label="Copyright (c) 2021 The LWA Consortium")
         lwa1Label.SetForegroundColour(wx.WHITE)
         lwa1Label.SetBackgroundColour(wx.BLACK)
         sizer.Add(lwa1Label, (2+ih, iw), (1, tw), wx.ALIGN_CENTER|wx.ALIGN_CENTER_VERTICAL|wx.ALL, 4)
@@ -353,12 +279,12 @@ class LWATV(wx.Frame):
         self.updateImageDescription()
         
         # Start the timers
-        if self.config['enableFade']:
+        if self.args.enable_fade:
             lift = 200
         else:
             lift = 5000
         self.latestTimer.Start(lift)
-        if self.config['enableMovie']:
+        if not self.args.disable_movie:
             wx.CallAfter(self.updatePreviousMovie)
             
     def onSize(self, event):
@@ -380,32 +306,32 @@ class LWATV(wx.Frame):
         
     def onQuit(self, event):
         self.latestTimer.Stop()
-        if self.config['enableMovie']:
+        if not self.args.disable_movie:
             self.previousMovie.stop()
         self.Destroy()
         
     def loadStationImage(self):
-        if self.config['station'] == 'LWA-SV':
-            fh = open(os.path.join(self.imagePath, 'lwasv.jpg'), 'r')
+        if self.args.lwatv2:
+            fh = open(os.path.join(self.imagePath, 'lwasv.jpg'), 'rb')
         else:
-            fh = open(os.path.join(self.imagePath, 'lwa1.jpg'), 'r')
+            fh = open(os.path.join(self.imagePath, 'lwa1.jpg'), 'rb')
         data = fh.read()
         fh.close()
         
-        self.wxStationImage = Image(StringIO(data))
+        self.wxStationImage = Image(BytesIO(data))
         
     def loadLatestImage(self):
-        if self.config['station'] == 'LWA-SV':
-            url = 'http://lwalab.phys.unm.edu/lwatv2/lwatv.png?lwatvgui=%s' % int(time.time())
-            urlAlt = 'http://lwalab.phys.unm.edu/lwatv2/beamPointings.png?lwatvgui=%s' % int(time.time())
+        if self.args.lwatv2:
+            url = 'https://lwalab.phys.unm.edu/lwatv2/lwatv.png?lwatvgui=%s' % int(time.time())
+            urlAlt = 'https://lwalab.phys.unm.edu/lwatv2/beamPointings.png?lwatvgui=%s' % int(time.time())
         else:
-            url = 'http://lwalab.phys.unm.edu/lwatv/lwatv.png?lwatvgui=%s' % int(time.time())
-            urlAlt = 'http://lwalab.phys.unm.edu/lwatv/beamPointings.png?lwatvgui=%s' % int(time.time())
+            url = 'https://lwalab.phys.unm.edu/lwatv/lwatv.png?lwatvgui=%s' % int(time.time())
+            urlAlt = 'https://lwalab.phys.unm.edu/lwatv/beamPointings.png?lwatvgui=%s' % int(time.time())
         
         latestResult = "Download at %s" % url
         try:
             # Try to get the latest image...
-            fh = urllib2.urlopen(url)
+            fh = urlopen(url)
             data = fh.read()
             fh.close()
             
@@ -417,7 +343,7 @@ class LWATV(wx.Frame):
             
             # Is the image recent enough to think that TBN/PASI is running?
             if age > 120:
-                fh = urllib2.urlopen(urlAlt)
+                fh = urlopen(urlAlt)
                 data = fh.read()
                 fh.close()
                 
@@ -427,7 +353,7 @@ class LWATV(wx.Frame):
                 self.latestText.SetLabel("Current Beam Pointings")
             else:
                 self.config['imageMode'] = 'LWATV'
-                if self.config['station'] == 'LWA-SV':
+                if self.args.lwatv2:
                     self.latestText.SetLabel("Latest LWATV2 Image")
                 else:
                     self.latestText.SetLabel("Latest LWATV Image")
@@ -441,17 +367,17 @@ class LWATV(wx.Frame):
             latestResult = latestResult+" -> error"
             self.latestText.SetLabel("Network Connection Error")
             
-        if self.config['verbose']:
-            print latestResult
-        self.wxLatestImage = Image(StringIO(data))
+        if self.args.verbose:
+            print(latestResult)
+        self.wxLatestImage = Image(BytesIO(data))
         
-        if self.config['enableFade']:
+        if self.args.enable_fade:
             self.pilLatestImageTime = time.time()
-            self.pilLatestImage = PImage.open(StringIO(data))
+            self.pilLatestImage = PImage.open(BytesIO(data))
             self.pilLatestImage = self.pilLatestImage.convert('RGB')
             
     def loadImageDescription(self):
-        if self.config['station'] == 'LWA-SV':
+        if self.args.lwatv2:
             fh = open(os.path.join(self.infoPath, 'lwatv2.txt'))
         else:
             fh = open(os.path.join(self.infoPath, 'lwatv.txt'))
@@ -479,9 +405,9 @@ class LWATV(wx.Frame):
             self.loadStationImage()
             
         w, h = self._keepAspect(self.wxStationImage, self.stationImage)
-        image = self.wxStationImage.Scale(w, h, self.config['imageQuality'])
+        image = self.wxStationImage.Scale(w, h, wx.IMAGE_QUALITY_NORMAL)
         w2, h2 = self.stationImage.GetSize()
-        image.Resize(self.stationImage.GetSize(), ((w2-w)/2, (h2-h)/2), 0, 0, 0)
+        image.Resize(self.stationImage.GetSize(), ((w2-w)//2, (h2-h)//2), 0, 0, 0)
         bitmap = Bitmap(image)
         
         dc = ClientDC(self.stationImage)
@@ -493,16 +419,16 @@ class LWATV(wx.Frame):
         if getattr(self, "wxLatestImage", None) is None:
             self.latestImageTime = time.time()
             self.loadLatestImage()
-            if self.config['enableFade']:
+            if self.args.enable_fade:
                 self.pilLatestImageOld = self.pilLatestImage
                 
         if time.time() - self.latestImageTime > 5:
             self.latestImageTime = time.time()
-            if self.config['enableFade']:
+            if self.args.enable_fade:
                 self.pilLatestImageOld = self.pilLatestImage
             self.loadLatestImage()
             
-        if self.config['enableFade']:
+        if self.args.enable_fade:
             if time.time()-self.pilLatestImageTime < self.config['fadeTime']:
                 alpha = (time.time() - self.pilLatestImageTime)/self.config['fadeTime']
                 try:
@@ -515,22 +441,22 @@ class LWATV(wx.Frame):
                 
             # Convert to wxImage
             wxImage = wx.EmptyImage( *pilImage.size  )
-            wxImage.SetData(pilImage.tostring())
+            wxImage.SetData(pilImage.tobytes())
         else:
             wxImage = self.wxLatestImage
             
         w, h = self._keepAspect(wxImage, self.latestImage)
-        image = wxImage.Scale(w, h, self.config['imageQuality'])
+        image = wxImage.Scale(w, h, wx.IMAGE_QUALITY_NORMAL)
         w2, h2 = self.latestImage.GetSize()
-        image.Resize(self.latestImage.GetSize(), ((w2-w)/2, (h2-h)/2), 0, 0, 0)
+        image.Resize(self.latestImage.GetSize(), ((w2-w)//2, (h2-h)//2), 0, 0, 0)
         bitmap = Bitmap(image)
         
         dc = ClientDC(self.latestImage)
         dc.DrawBitmap(bitmap, 0, 0)
         
         if oldMode != self.config['imageMode']:
-            if self.config['verbose']:
-                print "Image mode changed, triggering description update"
+            if self.args.verbose:
+                print("Image mode changed, triggering description update")
             wx.CallAfter(self.updateImageDescription)
             
     def updatePreviousMovie(self, event=None):
@@ -564,14 +490,36 @@ class LWATV(wx.Frame):
 
 
 if __name__ == "__main__":
-    # Parse the options
-    config = parseOptions(sys.argv[1:])
+    parser = argparse.ArgumentParser(
+        description="GUI for displaying the contents of LWATV in an educational setting",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('-f', '--enable-fade', action='store_true',
+                        help='enable the LWATV latest image fade effect')
+    parser.add_argument('-d', '--disable-movie', action='store_true',
+                        help='disable playing old movies')
+    parser.add_argument('-n', '--disable-maximize', action='store_true',
+                        help='disable automatic maximization of the window')
+    parser.add_argument('-v', '--verbose', action='store_true',
+                        help='dislay GUI status messages')
+    parser.add_argument('-2', '--lwatv2', action='store_true',
+                        help='show data from LWA-SV instead of LWA1')
+    args = parser.parse_args()
     
-    print "Starting %s with PID %i" % (os.path.basename(__file__), os.getpid())
+    # Check for movies
+    basePath = os.path.dirname(os.path.abspath(__file__))
+    moviePath = os.path.join(basePath, 'movies')
+    movies = glob.glob(os.path.join(moviePath, '*.mov'))
+    if len(movies) == 0:
+        print("WARNING: No movies found under 'movies/', disabling movie panel.")
+        print("         To enable the movie panel, run 'updateMovies.py' and   ")
+        print("         restart this script.                                   ")
+        args.disable_movies = True
+        
+    print("Starting %s with PID %i" % (os.path.basename(__file__), os.getpid()))
     
     # Suppress various error popups
     EnableLogging(False)
     
     app = wx.App()
-    LWATV(None, title="LWATV GUI", config=config)
+    LWATV(None, title="LWATV GUI", args=args, config={'fadeTime': 1.5})
     app.MainLoop()
