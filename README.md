@@ -39,3 +39,10 @@ to be populated by a call to updateMovies.py.
 RaspberryPi
 -----------
 Raspberry Pi-specific version of lwaTV3.py.
+
+
+Other LWA Education and Public Outreach Resources
+=================================================
+ * [lwa_status](https://github.com/lwa-project/lwa_status) - text-based overview of the LWA stations
+ * [The Low Frequency Sky](https://fornax.phys.unm.edu/low-frequency-sky/index.html) - an interactive view of the sky below 100 MHz
+ * [The Multi-Wavelength Sky](https://fornax.phys.unm.edu/multi-wavelength-sky/index.html) - compare how the sky looks at a variety of wavelengths
