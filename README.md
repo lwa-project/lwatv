@@ -2,6 +2,8 @@ LWATV
 =====
 Software for displaying LWATV images and movies outside of a web broswer.
 
+![Example LWATV GUI window](https://github.com/lwa-project/lwatv/raw/main/images/example.png)
+
 lwaTV3.py
 ---------
 Python script for displaying a GUI showing the latest LWATV image.  The GUI
