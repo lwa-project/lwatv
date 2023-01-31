@@ -43,6 +43,8 @@ Raspberry Pi-specific version of lwaTV3.py.
 
 Other LWA Education and Public Outreach Resources
 =================================================
+ * [LWATV Channel 1](https://leo.phys.unm.edu/~lwa/lwatv.html) - the sky over LWA1
+ * [LWATV Channel 2](https://leo.phys.unm.edu/~lwa/lwatv2.html) - the sky over LWA-SV
  * [lwa_status](https://github.com/lwa-project/lwa_status) - text-based overview of the LWA stations
  * [The Low Frequency Sky](https://fornax.phys.unm.edu/low-frequency-sky/index.html) - an interactive view of the sky below 100 MHz
  * [The Multi-Wavelength Sky](https://fornax.phys.unm.edu/multi-wavelength-sky/index.html) - compare how the sky looks at a variety of wavelengths
