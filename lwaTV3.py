@@ -17,7 +17,9 @@ from urllib.request import urlopen
 from datetime import datetime
 from PIL import Image as PImage
 from io import BytesIO
-    
+
+os.environ['WXSUPPRESS_SIZER_FLAGS_CHECK'] = '1'
+
 if sys.platform.startswith('linux'):
     import ctypes
     try:
@@ -88,6 +90,9 @@ class MoviePlayer(wx.Panel):
     def on_error_message(self, bus, message):
         err, debug = message.parse_error()
         print("Error %s: %s" % (err, debug))
+        
+        self.pipeline.set_state(Gst.State.NULL)
+        wx.CallAfter(self.update)
         
     def on_sync_message(self, bus, message):
         if message.get_structure().get_name() == 'prepare-window-handle':
@@ -235,7 +240,7 @@ class LWATV(wx.Frame):
             self.descriptionText.SetBackgroundColour(wx.BLACK)
         sizer.Add(self.descriptionText, (1, iw), (ih, tw), wx.EXPAND|wx.ALL, 10)
         ## LWA1 Label
-        lwa1Label = wx.StaticText(panel, label="Copyright (c) 2021 The LWA Consortium")
+        lwa1Label = wx.StaticText(panel, label="Copyright (c) 2025 The LWA Consortium")
         lwa1Label.SetForegroundColour(wx.WHITE)
         lwa1Label.SetBackgroundColour(wx.BLACK)
         sizer.Add(lwa1Label, (2+ih, iw), (1, tw), wx.ALIGN_CENTER|wx.ALIGN_CENTER_VERTICAL|wx.ALL, 4)
