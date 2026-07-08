@@ -18,8 +18,6 @@ from datetime import datetime
 from PIL import Image as PImage
 from io import BytesIO
 
-os.environ['WXSUPPRESS_SIZER_FLAGS_CHECK'] = '1'
-
 if sys.platform.startswith('linux'):
     import ctypes
     try:
@@ -176,7 +174,7 @@ class LWATV(wx.Frame):
         ih = 6
         iw = 6
         tw = 2
-        iflags = wx.EXPAND|wx.ALIGN_CENTER|wx.ALIGN_CENTER_VERTICAL|wx.LEFT|wx.RIGHT
+        iflags = wx.EXPAND|wx.LEFT|wx.RIGHT
         
         font = wx.SystemSettings.GetFont(wx.SYS_SYSTEM_FONT)
         font.SetPointSize(font.GetPointSize()+2)
@@ -240,7 +238,7 @@ class LWATV(wx.Frame):
             self.descriptionText.SetBackgroundColour(wx.BLACK)
         sizer.Add(self.descriptionText, (1, iw), (ih, tw), wx.EXPAND|wx.ALL, 10)
         ## LWA1 Label
-        lwa1Label = wx.StaticText(panel, label="Copyright (c) 2025 The LWA Consortium")
+        lwa1Label = wx.StaticText(panel, label="Copyright (c) 2026 The LWA Consortium")
         lwa1Label.SetForegroundColour(wx.WHITE)
         lwa1Label.SetBackgroundColour(wx.BLACK)
         sizer.Add(lwa1Label, (2+ih, iw), (1, tw), wx.ALIGN_CENTER|wx.ALIGN_CENTER_VERTICAL|wx.ALL, 4)
@@ -252,13 +250,13 @@ class LWATV(wx.Frame):
             sizer.AddGrowableRow(i)
             
         sizer2 = wx.BoxSizer(wx.VERTICAL)
-        sizer2.Add(sizer, 1, wx.EXPAND|wx.ALIGN_CENTER|wx.ALIGN_CENTER_VERTICAL, 0)
+        sizer2.Add(sizer, 1, wx.EXPAND, 0)
         panel.SetSizer(sizer2)
         panel.Layout()
         self.panel = panel
         
         sizer3 = wx.BoxSizer(wx.VERTICAL)
-        sizer3.Add(panel, 1, wx.EXPAND|wx.ALIGN_CENTER|wx.ALIGN_CENTER_VERTICAL, 0)
+        sizer3.Add(panel, 1, wx.EXPAND, 0)
         self.SetSizer(sizer3)
         self.Layout()
         
