@@ -5,7 +5,7 @@
 # movie cache, and (re)installs the autostart entry and movie-update cron job.
 #
 # Usage, from a checked-out copy of the repository:
-#     bash RaspberryPi/setup/setup.sh
+#     bash RaspberryPi/setup.sh
 #
 
 set -euo pipefail
@@ -13,7 +13,7 @@ set -euo pipefail
 # Repository root, derived from this script's location so the paths baked into
 # the autostart entry and crontab are always correct.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 PYTHON=/usr/bin/python3
 GUI="${REPO_DIR}/lwaTV3.py"
