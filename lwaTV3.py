@@ -83,6 +83,16 @@ class MoviePlayer(tk.Label):
             bus.enable_sync_message_emission()
             bus.connect('sync-message::element', self.on_sync_message)
             self.bind('<Map>', self._on_map)
+            # playbin picks a sensible sink by default, but allow it to be
+            # overridden (e.g. LWATV_VIDEO_SINK=ximagesink) for platforms where
+            # the default does not embed via GstVideoOverlay.
+            sinkName = os.environ.get('LWATV_VIDEO_SINK', None)
+            if sinkName:
+                vs = Gst.ElementFactory.make(sinkName, None)
+                if vs is not None:
+                    self.player.set_property("video-sink", vs)
+                elif self.verbose:
+                    print("Could not create video sink '%s'; using default" % sinkName)
         else:
             # Grab decoded video as raw RGB frames instead of a native window.
             self.appsink = Gst.ElementFactory.make("appsink", None)

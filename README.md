@@ -15,8 +15,14 @@ consists of four parts:
   4) a text description describing what sources are in the images and 
      movies.
 
-This script uses wxPython and GStreamer 1.0 for generating the GUI and 
-displaying the images.
+This script uses Tkinter (from the Python standard library), the Python
+Imaging Library (PIL/Pillow, including the `ImageTk` module), and GStreamer
+1.0 for generating the GUI and displaying the images.
+
+On Debian-based systems (including Raspberry Pi OS) `ImageTk` ships in a
+separate package from the rest of PIL and must be installed explicitly:
+
+    sudo apt install python3-pil.imagetk
 
 updateMovies.py
 ---------------
