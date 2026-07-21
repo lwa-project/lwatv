@@ -9,7 +9,7 @@ lwaTV3.py
 Python script for displaying a GUI showing the latest LWATV image.  The GUI
 consists of four parts:
   1) The latest LWATV image,
-  2) a picture of the LWA1 site with the VLA in the background, 
+  2) a picture of the LWA site,
   3) an optional pre-recorded LWATV movie for previous days, and
   4) a text description describing what sources are in the images and 
      movies.

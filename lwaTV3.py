@@ -27,7 +27,7 @@ if sys.platform.startswith('linux'):
     try:
         x11 = ctypes.cdll.LoadLibrary('libX11.so')
         x11.XInitThreads()
-    except:
+    except Exception:
         pass
 
 import gi
@@ -45,6 +45,35 @@ except AttributeError:
     RESAMPLE = PImage.LANCZOS
 
 
+# Paths
+_BASE_PATH = os.path.dirname(os.path.abspath(__file__))
+_INFO_PATH = os.path.join(_BASE_PATH, 'info')
+_IMAGE_PATH = os.path.join(_BASE_PATH, 'images')
+_MOVIE_PATH = os.path.join(_BASE_PATH, 'movies')
+
+
+# Channels
+_CHANNELS = {'lwatv': {'latest_url': 'https://lwalab.phys.unm.edu/lwatv',
+                       'latest_label': 'Latest LWATV Image',
+                       'latest_info': os.path.join(_INFO_PATH, 'lwatv.txt'),
+                       'site_image': os.path.join(_IMAGE_PATH, 'lwa1.jpg'),
+                       'site_label': 'The LWA1 Site Located by the VLA'
+                      },
+             'lwatv2': {'latest_url': 'https://lwalab.phys.unm.edu/lwatv2',
+                        'latest_label': 'Latest LWATV2 Image',
+                        'latest_info': os.path.join(_INFO_PATH, 'lwatv2.txt'),
+                        'site_image': os.path.join(_IMAGE_PATH, 'lwasv.jpg'),
+                        'site_label': 'The LWA-SV Site Located on the Sevilleta NWR'
+                       },
+             'lwatv4': {'latest_url': 'https://lwalab.phys.unm.edu/lwatv4',
+                        'latest_label': 'Latest LWATV4 Image',
+                        'latest_info': os.path.join(_INFO_PATH, 'lwatv4.txt'),
+                        'site_image': os.path.join(_IMAGE_PATH, 'lwana.jpg'),
+                        'site_label': 'The LWA-NA Site Located by the VLA'
+                       }
+            }
+
+
 class MoviePlayer(tk.Label):
     """
     tk.Label object to deal with playing the old movies.
@@ -58,10 +87,9 @@ class MoviePlayer(tk.Label):
         Label as images.
     """
 
-    def __init__(self, parent, moviePath, label, verbose=False):
+    def __init__(self, parent, label, verbose=False):
         super().__init__(parent, bg='black', bd=0, highlightthickness=0)
 
-        self.moviePath = moviePath
         self.label = label
         self.verbose = verbose
         self._frame = None
@@ -181,7 +209,7 @@ class MoviePlayer(tk.Label):
         self.after(0, self.advance)
 
     def get_movie(self):
-        movies = glob.glob(os.path.join(self.moviePath, '*.mov'))
+        movies = glob.glob(os.path.join(_MOVIE_PATH, '*.mov'))
         movies.sort()
         movie = random.choice(movies)
 
@@ -196,13 +224,8 @@ class MoviePlayer(tk.Label):
             self.after(100, self.advance)
             return
 
-        isPlaying = False
-        for state in self.pipeline.get_state(0):
-            if type(state) != type(Gst.State.PLAYING):
-                continue
-            if state == Gst.State.PLAYING:
-                isPlaying = True
-                break
+        _, state, _ = self.pipeline.get_state(0)
+        isPlaying = (state == Gst.State.PLAYING)
 
         if not isPlaying:
             movie = self.get_movie()
@@ -232,11 +255,12 @@ class LWATV(tk.Tk):
         self.args = args
         self.config = config if config is not None else {}
 
-        # Paths
-        basePath = os.path.dirname(os.path.abspath(__file__))
-        self.infoPath = os.path.join(basePath, 'info')
-        self.imagePath = os.path.join(basePath, 'images')
-        self.moviePath = os.path.join(basePath, 'movies')
+        # Site info
+        self.lwatv_config = _CHANNELS['lwatv']
+        if args.lwatv4:
+            self.lwatv_config = _CHANNELS['lwatv4']
+        elif args.lwatv2:
+            self.lwatv_config = _CHANNELS['lwatv2']
 
         # Build the UI
         self.init_ui()
@@ -298,12 +322,7 @@ class LWATV(tk.Tk):
         else:
             siw = iw
         ## Label
-        if self.args.lwatv4:
-            stationLabel = "The LWA-NA Site Located by the VLA"
-        elif self.args.lwatv2:
-            stationLabel = "The LWA-SV Site Located on the Sevilleta NWR"
-        else:
-            stationLabel = "The LWA1 Site Located by the VLA"
+        stationLabel = self.lwatv_config['site_label']
         stationText = tk.Label(container, text=stationLabel,
                                fg='white', bg='black', font=labelFont)
         stationText.grid(row=2+ih, column=0, columnspan=siw, padx=4, pady=4)
@@ -322,7 +341,7 @@ class LWATV(tk.Tk):
             ## Movie
             movieFrame = self._panel(row=2+ih//2, column=iw//2, rowspan=ih//2,
                                      columnspan=iw//2, sticky='nsew', padx=4)
-            self.previousMovie = MoviePlayer(movieFrame, self.moviePath,
+            self.previousMovie = MoviePlayer(movieFrame,
                                              self.movieText, self.args.verbose)
             self.previousMovie.pack(fill='both', expand=True)
 
@@ -415,12 +434,7 @@ class LWATV(tk.Tk):
         self.destroy()
 
     def load_station_image(self):
-        if self.args.lwatv4:
-            path = os.path.join(self.imagePath, 'lwana.jpg')
-        elif self.args.lwatv2:
-            path = os.path.join(self.imagePath, 'lwasv.jpg')
-        else:
-            path = os.path.join(self.imagePath, 'lwa1.jpg')
+        path = self.lwatv_config['site_image']
         self.pilStationImage = PImage.open(path).convert('RGB')
 
     def _fetch_latest_async(self):
@@ -438,12 +452,7 @@ class LWATV(tk.Tk):
 
     def _download_latest(self):
         # Runs on a worker thread: must not touch any Tk widgets.
-        if self.args.lwatv4:
-            url = f'https://lwalab.phys.unm.edu/lwatv4/lwatv.png?lwatvgui={time.time():.0f}'
-        elif self.args.lwatv2:
-            url = f'https://lwalab.phys.unm.edu/lwatv2/lwatv.png?lwatvgui={time.time():.0f}'
-        else:
-            url = f'https://lwalab.phys.unm.edu/lwatv/lwatv.png?lwatvgui={time.time():.0f}'
+        url = f"{self.lwatv_config['latest_url']}/lwatv.png?lwatvgui={time.time():.0f}"
 
         log = f"Download at {url}"
         try:
@@ -459,22 +468,17 @@ class LWATV(tk.Tk):
             # Is the image recent enough to think that the station is running?
             if age > 120:
                 # Reachable, but stale -> the station is not currently running
-                image = PImage.open(os.path.join(self.imagePath, 'error.png')).convert('RGB')
+                image = PImage.open(os.path.join(_IMAGE_PATH, 'error.png')).convert('RGB')
                 return ("LWATV is not currently running",
                         image, f"{log} -> not currently running")
 
             image = PImage.open(BytesIO(data)).convert('RGB')
-            if self.args.lwatv4:
-                label = "Latest LWATV4 Image"
-            elif self.args.lwatv2:
-                label = "Latest LWATV2 Image"
-            else:
-                label = "Latest LWATV Image"
+            label = self.lwatv_config['latest_label']
             return (label, image, log)
 
         except Exception:
             # Deal with network/download errors
-            image = PImage.open(os.path.join(self.imagePath, 'error.png')).convert('RGB')
+            image = PImage.open(os.path.join(_IMAGE_PATH, 'error.png')).convert('RGB')
             return ("Network Connection Error", image, f"{log} -> error")
 
     def _apply_latest(self, labelText, image, log):
@@ -493,12 +497,7 @@ class LWATV(tk.Tk):
         self.update_latest_image()
 
     def load_image_description(self):
-        if self.args.lwatv4:
-            descname = os.path.join(self.infoPath, 'lwatv4.txt')
-        elif self.args.lwatv2:
-            descname = os.path.join(self.infoPath, 'lwatv2.txt')
-        else:
-            descname = os.path.join(self.infoPath, 'lwatv.txt')
+        descname = self.lwatv_config['latest_info']
         with open(descname, 'r') as fh:
             self.imageDescription = fh.read()
 
@@ -597,10 +596,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Check for movies
-    basePath = os.path.dirname(os.path.abspath(__file__))
-    moviePath = os.path.join(basePath, 'movies')
-    chan_filename = os.path.join(moviePath, 'channel')
-    movies = glob.glob(os.path.join(moviePath, '*.mov'))
+    chan_filename = os.path.join(_MOVIE_PATH, 'channel')
+    movies = glob.glob(os.path.join(_MOVIE_PATH, '*.mov'))
     if len(movies) == 0:
         ## No movies
         print("WARNING: No movies found under 'movies/', disabling movie panel.")
@@ -612,12 +609,12 @@ if __name__ == "__main__":
         ## Movies.  Pull out what movies we have and then figure out what to do
         with open(chan_filename, 'r') as fh:
             sel_chan = fh.read().strip()
-            
+
         ## Auto-select: update args.lwatv* based on the file
         if args.auto_select:
             args.lwatv2 = (sel_chan == 'lwatv2')
             args.lwatv4 = (sel_chan == 'lwatv4')
-            
+
         ## Cross-check how we've been launched vs. what's on disk
         cmatch = True
         if args.lwatv4:
@@ -631,7 +628,7 @@ if __name__ == "__main__":
             print("         To enable the movie panel, run 'updateMovies.py' with")
             print("         the correct channel selected and restart this script.")
             args.disable_movie = True
-            
+
     channel = 'lwatv'
     if args.lwatv4:
         channel = 'lwatv4'

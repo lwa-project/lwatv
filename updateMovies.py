@@ -22,6 +22,16 @@ _MOVIE_PATH = os.path.join(_BASE_PATH, 'movies')
 _CHUNK_SIZE = 4*1024**2
 
 
+# Channels
+_CHANNELS = {'lwatv': {'url': 'https://lwalab.phys.unm.edu/lwatv'
+                      },
+             'lwatv2': {'url': 'https://lwalab.phys.unm.edu/lwatv2'
+                       },
+             'lwatv4': {'url': 'https://lwalab.phys.unm.edu/lwatv4'
+                       },
+            }
+
+
 def main(args):
     # Make sure there is a movie directory
     if not os.path.exists(_MOVIE_PATH):
@@ -111,12 +121,7 @@ def main(args):
         if args.verbose:
             print(f"{len(toDownload)} movie(s) will be downloaded")
         for movie in toDownload:
-            if args.lwatv4:
-                url = f'https://lwalab.phys.unm.edu/lwatv4/{movie}'
-            elif args.lwatv2:
-                url = f'https://lwalab.phys.unm.edu/lwatv2/{movie}'
-            else:
-                url = f'https://lwalab.phys.unm.edu/lwatv/{movie}'
+            url = f"{_CHANNELS[sel_chan]['url']}/{movie}"
             if args.verbose:
                 print(f"Downloading '{url}'...")
                 
