@@ -64,7 +64,7 @@ Name=LWATV GUI
 Comment=The LWATV GUI
 Terminal=false
 StartupNotify=false
-Exec=sh -c "sleep 10 && ${PYTHON} ${GUI}"
+Exec=sh -c "sleep 10 && ${PYTHON} ${GUI} -a"
 EOF
 
 # 4. Daily movie-update cron job (idempotent) ---------------------------------
@@ -83,5 +83,5 @@ Two things still need to be set once, by hand, to run as a dedicated display:
     not blank.
 
 Launch the GUI now without rebooting with:
-    ${PYTHON} ${GUI}
+    ${PYTHON} ${GUI} -a
 EOF

@@ -30,7 +30,7 @@ Quick Setup
       (Preferences -> Screensaver).
  5. Reboot, or launch the GUI immediately with:
     ```
-    python3 ~/LWATV/lwaTV3.py
+    python3 ~/LWATV/lwaTV3.py -a
     ```
 
 Manual Setup
@@ -75,13 +75,23 @@ your setup), here is what it does.
     Comment=The LWATV GUI
     Terminal=false
     StartupNotify=false
-    Exec=sh -c "sleep 10 && python3 /home/pi/LWATV/lwaTV3.py"
+    Exec=sh -c "sleep 10 && python3 /home/pi/LWATV/lwaTV3.py -a"
     ```
  4. Add the following line to your crontab to update the movies every day at
     5:10 local time:
     ```
     10 5 * * * python3 /home/pi/LWATV/updateMovies.py
     ```
+
+Changing Channels
+-----------------
+`setup.sh` launches the GUI with `-a`, so the display always follows whatever
+channel the movie cache holds.  To switch stations you therefore only change
+the updater: add `-2` (LWA-SV) or `-4` (LWA-NA) to the `updateMovies.py` line
+in your crontab.  Run `updateMovies.py` once by hand with the new flag to swap
+the cache immediately (otherwise the daily cron job does it), then restart the
+GUI -- a reboot is simplest -- and `-a` brings it back up on the new channel.
+Re-running `setup.sh` resets the crontab to the default channel.
 
 Video Sink
 ----------

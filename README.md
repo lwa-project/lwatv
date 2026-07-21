@@ -48,6 +48,21 @@ RaspberryPi
 Information about running LWATV on a Raspberry Pi to build a stand alone kiosk.
 
 
+Channels
+========
+LWATV is broadcast on three channels, one per station: channel 1 (LWA1, the
+default), channel 2 (LWA-SV), and channel 4 (LWA-NA).  Both scripts pick a
+channel the same way -- no flag for channel 1, `-2` for channel 2, or `-4`
+for channel 4.
+
+`updateMovies.py` caches the movies for the selected channel and records the
+choice in `movies/channel`.  `lwaTV3.py` shows that channel's live image and
+description; instead of repeating the flag you can run it with
+`-a`/`--auto-select` to follow whatever channel `updateMovies.py` last
+downloaded.  If the GUI and the cached movies disagree, `lwaTV3.py` still
+shows the live image but hides the mismatched movie panel.
+
+
 Other LWA Education and Public Outreach Resources
 =================================================
  * [LWATV Channel 1](https://leo.phys.unm.edu/~lwa/lwatv.html) - the sky over LWA1
