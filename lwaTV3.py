@@ -424,28 +424,26 @@ class LWATV(tk.Tk):
         # the Tk event loop (which would freeze the appsink movie playback).
         self._fetching = True
         self.latestImageTime = time.time()
-        lwatv2 = self.args.lwatv2
 
         def work():
             # Hand the result back through a thread-safe queue; the main-thread
             # drainer applies it (Tk must only be touched from the main thread).
-            self._latestQueue.put(self._download_latest(lwatv2))
+            self._latestQueue.put(self._download_latest())
 
         threading.Thread(target=work, daemon=True).start()
 
-    def _download_latest(self, lwatv2):
+    def _download_latest(self):
         # Runs on a worker thread: must not touch any Tk widgets.
-        if lwatv2:
+        if self.args.lwatv2:
             url = f'https://lwalab.phys.unm.edu/lwatv2/lwatv.png?lwatvgui={time.time():.0f}'
         else:
             url = f'https://lwalab.phys.unm.edu/lwatv/lwatv.png?lwatvgui={time.time():.0f}'
 
         log = f"Download at {url}"
         try:
-            fh = urlopen(url)
-            info = fh.info()
-            data = fh.read()
-            fh.close()
+            with urlopen(url) as fh:
+                info = fh.info()
+                data = fh.read()
 
             lm = info.get("last-modified")
             lm = datetime.strptime(lm, "%a, %d %b %Y %H:%M:%S GMT").replace(tzinfo=timezone.utc)
@@ -460,7 +458,7 @@ class LWATV(tk.Tk):
                         image, f"{log} -> not currently running")
 
             image = PImage.open(BytesIO(data)).convert('RGB')
-            label = "Latest LWATV2 Image" if lwatv2 else "Latest LWATV Image"
+            label = "Latest LWATV2 Image" if self.args.lwatv2 else "Latest LWATV Image"
             return (label, image, log)
 
         except Exception:
