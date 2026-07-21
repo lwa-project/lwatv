@@ -483,11 +483,11 @@ class LWATV(tk.Tk):
 
     def load_image_description(self):
         if self.args.lwatv2:
-            fh = open(os.path.join(self.infoPath, 'lwatv2.txt'))
+            descname = os.path.join(self.infoPath, 'lwatv2.txt')
         else:
-            fh = open(os.path.join(self.infoPath, 'lwatv.txt'))
-        self.imageDescription = fh.read()
-        fh.close()
+            descname = os.path.join(self.infoPath, 'lwatv.txt')
+        with open(descname, 'r') as fh:
+            self.imageDescription = fh.read()
 
     def _keep_aspect(self, size, widget):
         wi, hi = size
