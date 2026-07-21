@@ -92,7 +92,7 @@ class MoviePlayer(tk.Label):
                 if vs is not None:
                     self.player.set_property("video-sink", vs)
                 elif self.verbose:
-                    print("Could not create video sink '%s'; using default" % sinkName)
+                    print(f"Could not create video sink '{sinkName}'; using default")
         else:
             # Grab decoded video as raw RGB frames instead of a native window.
             self.appsink = Gst.ElementFactory.make("appsink", None)
@@ -175,7 +175,7 @@ class MoviePlayer(tk.Label):
 
     def on_error_message(self, bus, message):
         err, debug = message.parse_error()
-        print("Error %s: %s" % (err, debug))
+        print(f"Error {err}: {debug}")
 
         self.pipeline.set_state(Gst.State.NULL)
         self.after(0, self.advance)
@@ -186,7 +186,7 @@ class MoviePlayer(tk.Label):
         movie = random.choice(movies)
 
         if self.verbose:
-            print("Next movie is %s" % movie)
+            print(f"Next movie is {movie}")
         return movie
 
     def advance(self):
@@ -211,14 +211,10 @@ class MoviePlayer(tk.Label):
             jd = mjd + 2400000.5
             t = (jd - 2440587.5)*86400.0
             dt = datetime.fromtimestamp(t, tz=timezone.utc)
-            mn = dt.strftime("%B")
-            dy = int(dt.strftime("%d"))
-            yr = int(dt.strftime("%Y"))
-            datestr = "%s %i, %i" % (mn, dy, yr)
-            self.label.config(text="Movie for %s" % datestr)
+            self.label.config(text=f"Movie for {dt.strftime('%B %d, %Y')}")
 
             self.pipeline.set_state(Gst.State.NULL)
-            self.player.set_property('uri', "file://%s" % movie)
+            self.player.set_property('uri', f"file://{movie}")
             self.pipeline.set_state(Gst.State.PLAYING)
 
     def stop(self):
@@ -235,7 +231,6 @@ class LWATV(tk.Tk):
         # Configuration
         self.args = args
         self.config = config if config is not None else {}
-        self.config['imageMode'] = ''
 
         # Paths
         basePath = os.path.dirname(os.path.abspath(__file__))
@@ -244,8 +239,8 @@ class LWATV(tk.Tk):
         self.moviePath = os.path.join(basePath, 'movies')
 
         # Build the UI
-        self.initUI()
-        self.initEvents()
+        self.init_ui()
+        self.init_events()
         if not self.args.disable_maximize:
             try:
                 self.wm_attributes('-zoomed', True)
@@ -253,11 +248,11 @@ class LWATV(tk.Tk):
                 self.update_idletasks()
                 sw = self.winfo_screenwidth()
                 sh = self.winfo_screenheight()
-                self.geometry("%ix%i+0+0" % (sw, sh))
+                self.geometry(f"{sw}x{sh}+0+0")
 
         # Update
-        self.initImages()
-        self.updateTextSize()
+        self.init_images()
+        self.update_text_size()
 
     def _panel(self, **gridopts):
         # A frame whose size is dictated solely by its grid cell, never by the
@@ -269,7 +264,7 @@ class LWATV(tk.Tk):
         frame.pack_propagate(False)
         return frame
 
-    def initUI(self):
+    def init_ui(self):
         container = tk.Frame(self, bg='black')
         container.pack(fill='both', expand=True)
         self.container = container
@@ -360,52 +355,52 @@ class LWATV(tk.Tk):
         for i in range(1, ih+1):
             container.grid_rowconfigure(i, weight=1)
 
-    def initEvents(self):
+    def init_events(self):
         # Re-render images when their panels are resized
-        self.latestImage.bind('<Configure>', self.updateLatestImage)
-        self.stationImage.bind('<Configure>', self.updateStationImage)
-        self.descriptionText.bind('<Configure>', lambda e: self.updateTextSize())
+        self.latestImage.bind('<Configure>', self.update_latest_image)
+        self.stationImage.bind('<Configure>', self.update_station_image)
+        self.descriptionText.bind('<Configure>', lambda e: self.update_text_size())
 
         # Window manager close
-        self.protocol('WM_DELETE_WINDOW', self.onQuit)
+        self.protocol('WM_DELETE_WINDOW', self.on_quit)
 
-    def initImages(self):
+    def init_images(self):
         # Update the images, movie, and text
         self._fetching = False
         self.latestImageTime = 0.0
         self._latestQueue = queue.Queue()
         self._fetch_latest_async()      # first live image (in the background)
-        self.updateStationImage()
-        self.updateImageDescription()
+        self.update_station_image()
+        self.update_image_description()
 
         # Start the recurring latest-image refresh and the queue drainer that
         # applies finished downloads back on the main thread
-        self._latestJob = self.after(self._latestInterval(), self._tickLatest)
-        self._drainJob = self.after(100, self._drainLatest)
+        self._latestJob = self.after(self._latest_interval(), self._tick_latest)
+        self._drainJob = self.after(100, self._drain_latest)
         if not self.args.disable_movie:
-            self.after(0, self.updatePreviousMovie)
+            self.after(0, self.update_previous_movie)
 
-    def _drainLatest(self):
+    def _drain_latest(self):
         try:
             while True:
                 result = self._latestQueue.get_nowait()
                 self._apply_latest(*result)
         except queue.Empty:
             pass
-        self._drainJob = self.after(100, self._drainLatest)
+        self._drainJob = self.after(100, self._drain_latest)
 
-    def _latestInterval(self):
+    def _latest_interval(self):
         return 200 if self.args.enable_fade else 5000
 
-    def _tickLatest(self):
+    def _tick_latest(self):
         # Kick off a fresh download when due (never blocks the event loop, so
         # the movie keeps playing), then re-render to drive the fade animation.
         if not self._fetching and time.time() - self.latestImageTime > 5:
             self._fetch_latest_async()
-        self.updateLatestImage()
-        self._latestJob = self.after(self._latestInterval(), self._tickLatest)
+        self.update_latest_image()
+        self._latestJob = self.after(self._latest_interval(), self._tick_latest)
 
-    def onQuit(self, event=None):
+    def on_quit(self, event=None):
         for attr in ('_latestJob', '_drainJob'):
             job = getattr(self, attr, None)
             if job is not None:
@@ -417,7 +412,7 @@ class LWATV(tk.Tk):
             self.previousMovie.stop()
         self.destroy()
 
-    def loadStationImage(self):
+    def load_station_image(self):
         if self.args.lwatv2:
             path = os.path.join(self.imagePath, 'lwasv.jpg')
         else:
@@ -441,17 +436,17 @@ class LWATV(tk.Tk):
     def _download_latest(self, lwatv2):
         # Runs on a worker thread: must not touch any Tk widgets.
         if lwatv2:
-            url = 'https://lwalab.phys.unm.edu/lwatv2/lwatv.png?lwatvgui=%s' % int(time.time())
+            url = f'https://lwalab.phys.unm.edu/lwatv2/lwatv.png?lwatvgui={time.time():.0f}'
         else:
-            url = 'https://lwalab.phys.unm.edu/lwatv/lwatv.png?lwatvgui=%s' % int(time.time())
+            url = f'https://lwalab.phys.unm.edu/lwatv/lwatv.png?lwatvgui={time.time():.0f}'
 
-        log = "Download at %s" % url
+        log = f"Download at {url}"
         try:
             fh = urlopen(url)
+            info = fh.info()
             data = fh.read()
             fh.close()
 
-            info = fh.info()
             lm = info.get("last-modified")
             lm = datetime.strptime(lm, "%a, %d %b %Y %H:%M:%S GMT").replace(tzinfo=timezone.utc)
             age = datetime.now(tz=timezone.utc) - lm
@@ -461,35 +456,34 @@ class LWATV(tk.Tk):
             if age > 120:
                 # Reachable, but stale -> the station is not currently running
                 image = PImage.open(os.path.join(self.imagePath, 'error.png')).convert('RGB')
-                return ('NotRunning', "LWATV is not currently running",
-                        image, log+" -> not currently running")
+                return ("LWATV is not currently running",
+                        image, f"{log} -> not currently running")
 
             image = PImage.open(BytesIO(data)).convert('RGB')
             label = "Latest LWATV2 Image" if lwatv2 else "Latest LWATV Image"
-            return ('LWATV', label, image, log)
+            return (label, image, log)
 
         except Exception:
             # Deal with network/download errors
             image = PImage.open(os.path.join(self.imagePath, 'error.png')).convert('RGB')
-            return ('Error', "Network Connection Error", image, log+" -> error")
+            return ("Network Connection Error", image, f"{log} -> error")
 
-    def _apply_latest(self, mode, labelText, image, log):
+    def _apply_latest(self, labelText, image, log):
         # Runs back on the Tk main thread once the download finishes.
         if self.args.enable_fade and getattr(self, "pilLatestImage", None) is not None:
             self.pilLatestImageOld = self.pilLatestImage
         self.pilLatestImage = image
         if self.args.enable_fade:
             self.pilLatestImageTime = time.time()
-        self.config['imageMode'] = mode
         self.latestText.config(text=labelText)
         self._fetching = False
 
         if self.args.verbose:
             print(log)
 
-        self.updateLatestImage()
+        self.update_latest_image()
 
-    def loadImageDescription(self):
+    def load_image_description(self):
         if self.args.lwatv2:
             fh = open(os.path.join(self.infoPath, 'lwatv2.txt'))
         else:
@@ -497,7 +491,7 @@ class LWATV(tk.Tk):
         self.imageDescription = fh.read()
         fh.close()
 
-    def _keepAspect(self, size, widget):
+    def _keep_aspect(self, size, widget):
         wi, hi = size
         wd, hd = widget.winfo_width(), widget.winfo_height()
 
@@ -506,10 +500,10 @@ class LWATV(tk.Tk):
         s = min([wr, hr])
         return int(round(wi*s)), int(round(hi*s))
 
-    def _renderImage(self, pil, widget):
+    def _render_image(self, pil, widget):
         if widget.winfo_width() <= 1 or widget.winfo_height() <= 1:
             return
-        w, h = self._keepAspect(pil.size, widget)
+        w, h = self._keep_aspect(pil.size, widget)
         if w <= 0 or h <= 0:
             return
         image = pil.resize((w, h), RESAMPLE)
@@ -517,12 +511,12 @@ class LWATV(tk.Tk):
         widget.config(image=photo)
         widget.image = photo
 
-    def updateStationImage(self, event=None):
+    def update_station_image(self, event=None):
         if getattr(self, "pilStationImage", None) is None:
-            self.loadStationImage()
-        self._renderImage(self.pilStationImage, self.stationImage)
+            self.load_station_image()
+        self._render_image(self.pilStationImage, self.stationImage)
 
-    def updateLatestImage(self, event=None):
+    def update_latest_image(self, event=None):
         # Render-only; the actual download happens asynchronously elsewhere.
         if getattr(self, "pilLatestImage", None) is None:
             return
@@ -537,22 +531,22 @@ class LWATV(tk.Tk):
         else:
             pil = self.pilLatestImage
 
-        self._renderImage(pil, self.latestImage)
+        self._render_image(pil, self.latestImage)
 
-    def updatePreviousMovie(self, event=None):
+    def update_previous_movie(self, event=None):
         self.previousMovie.advance()
 
-    def updateImageDescription(self, event=None):
+    def update_image_description(self, event=None):
         if getattr(self, "imageDescription", None) is None:
-            self.loadImageDescription()
+            self.load_image_description()
 
         self.descriptionText.config(state='normal')
         self.descriptionText.delete('1.0', 'end')
         self.descriptionText.insert('1.0', self.imageDescription)
         self.descriptionText.config(state='disabled')
-        self.after(0, self.updateTextSize)
+        self.after(0, self.update_text_size)
 
-    def updateTextSize(self):
+    def update_text_size(self):
         # Get the area of the text box
         w, h = self.descriptionText.winfo_width(), self.descriptionText.winfo_height()
         ta = w*h
@@ -596,7 +590,7 @@ if __name__ == "__main__":
         print("         restart this script.                                   ")
         args.disable_movie = True
 
-    print("Starting %s with PID %i" % (os.path.basename(__file__), os.getpid()))
+    print(f"Starting {os.path.basename(__file__)} with PID {os.getpid()}")
 
     app = LWATV(args=args, config={'fadeTime': 1.5})
     app.mainloop()

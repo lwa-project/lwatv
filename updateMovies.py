@@ -31,7 +31,7 @@ _CHUNK_SIZE = 1024**2
 def main(args):
     # Make sure there is a movie directory
     if not os.path.exists(_MOVIE_PATH):
-        print("%s not found, creating directory" % _MOVIE_PATH)
+        print(f"{_MOVIE_PATH} not found, creating directory")
         os.mkdir(_MOVIE_PATH)
         
     if args.query:
@@ -53,19 +53,19 @@ def main(args):
             
             sizes.append( os.path.getsize(movie) )
             
-        print("%i movies occupy %.1f MB of disk space" % (len(currentMovies), sum(sizes)/1024.0**2))
+        print(f"{len(currentMovies)} movies occupy {sum(sizes)/1024.0**2:.1f} MB of disk space")
         for movie,size,age in zip(movies, sizes, ages):
             if age == 1:
-                print("  %s @ %.1f MB -> %i day old" % (movie, size/1024.0**2, age))
+                print(f"  {movie} @ {size/1024.0**2:.1f} MB -> {age} day old")
             else:
-                print("  %s @ %.1f MB -> %i days old" % (movie, size/1024.0**2, age))
+                print(f"  {movie} @ {size/1024.0**2:.1f} MB -> {age} days old")
                 
     else:
         # Get the current MJD in order to figure out what can be downloaded
         tNow = time.time()
         jdNow = tNow/86400.0 + 2440587.5
         mjdNow = int(jdNow - 2400000.5)
-        movieDownloadRange = ["%i.mov" % i for i in range(mjdNow-args.days,mjdNow)]
+        movieDownloadRange = [f"{i}.mov" for i in range(mjdNow-args.days,mjdNow)]
         
         # Get the list of movies currently in the movie directory
         currentMovies = glob.glob(os.path.join(_MOVIE_PATH, '*.mov'))
@@ -86,23 +86,23 @@ def main(args):
                 
         # Out with the old...
         if args.verbose:
-            print("%i movie(s) will be deleted" % len(toDelete))
+            print(f"{len(toDelete)} movie(s) will be deleted")
         for movie in toDelete:
             try:
                 os.unlink(movie)
             except Exception as e:
-                print("Error deleting %s: %s" % (os.path.basename(movie), str(e)))
+                print(f"Error deleting {os.path.basename(movie)}: {e}")
                 
         # ... in with the new
         if args.verbose:
-            print("%i movie(s) will be downloaded" % len(toDownload))
+            print(f"{len(toDownload)} movie(s) will be downloaded")
         for movie in toDownload:
             if args.lwatv2:
-                url = 'https://lwalab.phys.unm.edu/lwatv2/%s' % movie
+                url = f'https://lwalab.phys.unm.edu/lwatv2/{movie}'
             else:
-                url = 'https://lwalab.phys.unm.edu/lwatv/%s' % movie
+                url = f'https://lwalab.phys.unm.edu/lwatv/{movie}'
             if args.verbose:
-                print("Downloading '%s'..." % url)
+                print(f"Downloading '{url}'...")
                 
             try:
                 dh = urlopen(url)
@@ -115,7 +115,7 @@ def main(args):
                 dh.close()
                 fh.close()
             except Exception as e:
-                print("Error with %s: %s" % (movie, str(e)))
+                print(f"Error with {movie}: {e}")
                 continue
                 
         # Report on disk usage
@@ -124,7 +124,7 @@ def main(args):
         for movie in currentMovies:
             diskUsage += os.path.getsize(movie)
         if args.verbose:
-            print("%i movies occupy %.1f MB of disk space" % (len(currentMovies), diskUsage/1024.0**2))
+            print(f"{len(currentMovies)} movies occupy {diskUsage/1024.0**2:.1f} MB of disk space")
 
 
 if __name__ == "__main__":
