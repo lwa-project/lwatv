@@ -105,15 +105,13 @@ def main(args):
                 print(f"Downloading '{url}'...")
                 
             try:
-                dh = urlopen(url)
-                fh = open(os.path.join(_MOVIE_PATH, movie), 'wb')
-                while True:
-                    data = dh.read(_CHUNK_SIZE)
-                    if len(data) == 0:
-                        break
-                    fh.write(data)
-                dh.close()
-                fh.close()
+                with urlopen(url) as dh:
+                    with open(os.path.join(_MOVIE_PATH, movie), 'wb') as fh:
+                        while True:
+                            data = dh.read(_CHUNK_SIZE)
+                            if len(data) == 0:
+                                break
+                            fh.write(data)
             except Exception as e:
                 print(f"Error with {movie}: {e}")
                 continue
