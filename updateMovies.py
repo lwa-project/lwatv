@@ -144,4 +144,3 @@ if __name__ == "__main__":
                         help='update movies from LWA-NA instead of LWA1')
     args = parser.parse_args()
     main(args)
-    
