@@ -61,6 +61,26 @@ def main(args):
                 print(f"  {movie} @ {size/1024.0**2:.1f} MB -> {age} days old")
                 
     else:
+        # Check to see if we've changed channels
+        if args.lwatv4:
+            sel_chan = 'lwatv4'
+        elif args.lwatv2:
+            sel_chan = 'lwatv2'
+        else:
+            sel_chan = 'lwatv'
+        delete_all = False
+        chan_filename = os.path.join(_MOVIE_PATH, 'channel')
+        if os.path.exists(chan_filename):
+            with open(chan_filename, 'r') as fh:
+                prev_chan = fh.read()
+                
+            if prev_chan != sel_chan:
+                delete_all = True
+                print(f"WARNING: Movies are changing from {prev_chan} to {sel_chan}")
+                
+        with open(chan_filename, 'w') as fh:
+            fh.write(sel_chan)
+            
         # Get the current MJD in order to figure out what can be downloaded
         tNow = time.time()
         jdNow = tNow/86400.0 + 2440587.5
@@ -74,14 +94,14 @@ def main(args):
         toDelete = []
         for movie in currentMovies:
             movieBase = os.path.basename(movie)
-            if movieBase not in movieDownloadRange:
+            if movieBase not in movieDownloadRange or delete_all:
                 toDelete.append(movie)
                 
         # Figure out which movies are missing from the directory
         toDownload = []
         for movie in movieDownloadRange:
             movieFull = os.path.join(_MOVIE_PATH, movie)
-            if movieFull not in currentMovies:
+            if movieFull not in currentMovies or delete_all:
                 toDownload.append(movie)
                 
         # Out with the old...

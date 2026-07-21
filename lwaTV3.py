@@ -597,13 +597,29 @@ if __name__ == "__main__":
     # Check for movies
     basePath = os.path.dirname(os.path.abspath(__file__))
     moviePath = os.path.join(basePath, 'movies')
+    chan_filename = os.path.join(moviePath, 'channel')
     movies = glob.glob(os.path.join(moviePath, '*.mov'))
     if len(movies) == 0:
         print("WARNING: No movies found under 'movies/', disabling movie panel.")
         print("         To enable the movie panel, run 'updateMovies.py' and   ")
         print("         restart this script.                                   ")
         args.disable_movie = True
-
+    elif os.path.exists(chan_filename):
+        with open(chan_filename, 'r') as fh:
+            sel_chan = fh.read()
+        cmatch = True
+        if args.lwatv4:
+            cmatch = (sel_chan == 'lwatv4')
+        elif args.lwatv2:
+            cmatch = (sel_chan == 'lwatv2')
+        else:
+            cmatch = (sel_chan == 'lwatv')
+        if not cmatch:
+            print(f"WARNING: The movies found under 'movies/' are for {sel_chan}")
+            print("         To enable the movie panel, run 'updateMovies.py' with")
+            print("         the correct channel selected and restart this script.")
+            args.disable_movie = True
+            
     print(f"Starting {os.path.basename(__file__)} with PID {os.getpid()}")
 
     app = LWATV(args=args, config={'fadeTime': 1.5})
