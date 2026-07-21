@@ -137,9 +137,10 @@ if __name__ == "__main__":
                         help='display status messages')
     parser.add_argument('-q', '--query', action='store_true',
                         help='query the cache')
-    parser.add_argument('-2', '--lwatv2', action='store_true',
+    sgroup = parser.add_mutually_exclusive_group(required=False)
+    sgroup.add_argument('-2', '--lwatv2', action='store_true',
                         help='update movies from LWA-SV instead of LWA1')
-    parser.add_argument('-4', '--lwatv4', action='store_true',
+    sgroup.add_argument('-4', '--lwatv4', action='store_true',
                         help='update movies from LWA-NA instead of LWA1')
     args = parser.parse_args()
     main(args)

@@ -587,9 +587,10 @@ if __name__ == "__main__":
                         help='disable automatic maximization of the window')
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='dislay GUI status messages')
-    parser.add_argument('-2', '--lwatv2', action='store_true',
+    sgroup = parser.add_mutually_exclusive_group(required=False)
+    sgroup.add_argument('-2', '--lwatv2', action='store_true',
                         help='show data from LWA-SV instead of LWA1')
-    parser.add_argument('-4', '--lwatv4', action='store_true',
+    sgroup.add_argument('-4', '--lwatv4', action='store_true',
                         help='show data from LWA-NA instead of LWA1')
     args = parser.parse_args()
 
