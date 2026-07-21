@@ -594,6 +594,13 @@ if __name__ == "__main__":
     sgroup.add_argument('-4', '--lwatv4', action='store_true',
                         help='show data from LWA-NA instead of LWA1')
     args = parser.parse_args()
+    
+    # Figure out what channel we've been asked to show
+    channel = 'lwatv'
+    if args.lwatv2:
+        channel = 'lwatv2'
+    elif args.lwatv4:
+        channel = 'lwatv4'
 
     # Check for movies
     chan_filename = os.path.join(_MOVIE_PATH, 'channel')
@@ -606,34 +613,23 @@ if __name__ == "__main__":
         args.disable_movie = True
         
     elif os.path.exists(chan_filename):
-        ## Movies.  Pull out what movies we have and then figure out what to do
+        ## Movies: pull out what movies we have and then figure out what to do
         with open(chan_filename, 'r') as fh:
             sel_chan = fh.read().strip()
 
-        ## Auto-select: update args.lwatv* based on the file
+        ## Auto-select: update channel based on the contents of the 'movies/channel' file
         if args.auto_select:
-            args.lwatv2 = (sel_chan == 'lwatv2')
-            args.lwatv4 = (sel_chan == 'lwatv4')
+            channel = sel_chan if sel_chan in _CHANNELS else 'lwatv'
 
-        ## Cross-check how we've been launched vs. what's on disk
-        cmatch = True
-        if args.lwatv4:
-            cmatch = (sel_chan == 'lwatv4')
-        elif args.lwatv2:
-            cmatch = (sel_chan == 'lwatv2')
-        else:
-            cmatch = (sel_chan == 'lwatv')
-        if not cmatch:
+        elif channel != sel_chan:
             print(f"WARNING: The movies found under 'movies/' are for {sel_chan}")
             print("         To enable the movie panel, run 'updateMovies.py' with")
             print("         the correct channel selected and restart this script.")
             args.disable_movie = True
 
-    channel = 'lwatv'
-    if args.lwatv4:
-        channel = 'lwatv4'
-    elif args.lwatv2:
-        channel = 'lwatv2'
+    # Push the resolved channel back into the args and report
+    args.lwatv2 = (channel == 'lwatv2')
+    args.lwatv4 = (channel == 'lwatv4')
     print(f"Starting {os.path.basename(__file__)} with channel '{channel}' with PID {os.getpid()}")
 
     app = LWATV(args=args, config={'fadeTime': 1.5})
