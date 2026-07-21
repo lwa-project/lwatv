@@ -97,7 +97,9 @@ def main(args):
         if args.verbose:
             print(f"{len(toDownload)} movie(s) will be downloaded")
         for movie in toDownload:
-            if args.lwatv2:
+            if args.lwatv4:
+                url = f'https://lwalab.phys.unm.edu/lwatv4/{movie}'
+            elif args.lwatv2:
                 url = f'https://lwalab.phys.unm.edu/lwatv2/{movie}'
             else:
                 url = f'https://lwalab.phys.unm.edu/lwatv/{movie}'
@@ -137,6 +139,8 @@ if __name__ == "__main__":
                         help='query the cache')
     parser.add_argument('-2', '--lwatv2', action='store_true',
                         help='update movies from LWA-SV instead of LWA1')
+    parser.add_argument('-4', '--lwatv4', action='store_true',
+                        help='update movies from LWA-NA instead of LWA1')
     args = parser.parse_args()
     main(args)
     

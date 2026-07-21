@@ -298,10 +298,12 @@ class LWATV(tk.Tk):
         else:
             siw = iw
         ## Label
-        if self.args.lwatv2:
+        if self.args.lwatv4:
+            stationLabel = "The LWA-NA Site Located by the VLA"
+        elif self.args.lwatv2:
             stationLabel = "The LWA-SV Site Located on the Sevilleta NWR"
         else:
-            stationLabel = "The LWA1 Site Located By the VLA"
+            stationLabel = "The LWA1 Site Located by the VLA"
         stationText = tk.Label(container, text=stationLabel,
                                fg='white', bg='black', font=labelFont)
         stationText.grid(row=2+ih, column=0, columnspan=siw, padx=4, pady=4)
@@ -413,7 +415,9 @@ class LWATV(tk.Tk):
         self.destroy()
 
     def load_station_image(self):
-        if self.args.lwatv2:
+        if self.args.lwatv4:
+            path = os.path.join(self.imagePath, 'lwana.jpg')
+        elif self.args.lwatv2:
             path = os.path.join(self.imagePath, 'lwasv.jpg')
         else:
             path = os.path.join(self.imagePath, 'lwa1.jpg')
@@ -434,7 +438,9 @@ class LWATV(tk.Tk):
 
     def _download_latest(self):
         # Runs on a worker thread: must not touch any Tk widgets.
-        if self.args.lwatv2:
+        if self.args.lwatv4:
+            url = f'https://lwalab.phys.unm.edu/lwatv4/lwatv.png?lwatvgui={time.time():.0f}'
+        elif self.args.lwatv2:
             url = f'https://lwalab.phys.unm.edu/lwatv2/lwatv.png?lwatvgui={time.time():.0f}'
         else:
             url = f'https://lwalab.phys.unm.edu/lwatv/lwatv.png?lwatvgui={time.time():.0f}'
@@ -458,7 +464,12 @@ class LWATV(tk.Tk):
                         image, f"{log} -> not currently running")
 
             image = PImage.open(BytesIO(data)).convert('RGB')
-            label = "Latest LWATV2 Image" if self.args.lwatv2 else "Latest LWATV Image"
+            if self.args.lwatv4:
+                label = "Latest LWATV4 Image"
+            elif self.args.lwatv2:
+                label = "Latest LWATV2 Image"
+            else:
+                label = "Latest LWATV Image"
             return (label, image, log)
 
         except Exception:
@@ -482,7 +493,9 @@ class LWATV(tk.Tk):
         self.update_latest_image()
 
     def load_image_description(self):
-        if self.args.lwatv2:
+        if self.args.lwatv4:
+            descname = os.path.join(self.infoPath, 'lwatv4.txt')
+        elif self.args.lwatv2:
             descname = os.path.join(self.infoPath, 'lwatv2.txt')
         else:
             descname = os.path.join(self.infoPath, 'lwatv.txt')
@@ -576,6 +589,8 @@ if __name__ == "__main__":
                         help='dislay GUI status messages')
     parser.add_argument('-2', '--lwatv2', action='store_true',
                         help='show data from LWA-SV instead of LWA1')
+    parser.add_argument('-4', '--lwatv4', action='store_true',
+                        help='show data from LWA-NA instead of LWA1')
     args = parser.parse_args()
 
     # Check for movies
