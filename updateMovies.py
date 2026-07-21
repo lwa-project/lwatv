@@ -66,7 +66,7 @@ def main(args):
         chan_filename = os.path.join(_MOVIE_PATH, 'channel')
         if os.path.exists(chan_filename):
             with open(chan_filename, 'r') as fh:
-                prev_chan = fh.read()
+                prev_chan = fh.read().strip()
                 
             if prev_chan != sel_chan:
                 delete_all = True
