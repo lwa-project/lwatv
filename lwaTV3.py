@@ -211,7 +211,7 @@ class MoviePlayer(tk.Label):
             jd = mjd + 2400000.5
             t = (jd - 2440587.5)*86400.0
             dt = datetime.fromtimestamp(t, tz=timezone.utc)
-            self.label.config(text=f"Movie for {dt.strftime('%B %d, %Y')}")
+            self.label.config(text=f"Movie for {dt.strftime('%B')} {dt.day}, {dt.year}")
 
             self.pipeline.set_state(Gst.State.NULL)
             self.player.set_property('uri', f"file://{movie}")

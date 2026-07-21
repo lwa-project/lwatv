@@ -8,24 +8,18 @@ script.
 import os
 import sys
 import glob
-import math
 import time
 import argparse
 from urllib.request import urlopen
 
 
-# Number of days worth of movies to keep on hand for replaying
-_DAYS_TO_STORE = 7
-
-
 # Paths
 _BASE_PATH = os.path.dirname(os.path.abspath(__file__))
-_IMAGE_PATH = os.path.join(_BASE_PATH, 'images')
 _MOVIE_PATH = os.path.join(_BASE_PATH, 'movies')
 
 
-# Download chunk size
-_CHUNK_SIZE = 1024**2
+# Download chunk size (B)
+_CHUNK_SIZE = 4*1024**2
 
 
 def main(args):
