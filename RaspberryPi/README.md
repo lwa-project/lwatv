@@ -1,36 +1,104 @@
 RaspberryPi
 ===========
-Version of the lwaTV3.py script that runs on the Raspberry Pi Model B (RPi)
-and the files necessary to get it running under Raspberry Pi OS.
+Running the LWATV GUI on a Raspberry Pi as a stand-alone kiosk display, using
+Raspberry Pi OS (Bookworm or Trixie).
 
-lwaTV3.rpi.py
--------------
-Version of the lwaTV3.py script tuned for the RPi (built using the 
-buildRPi.sh script described below).
+As of the Tkinter port the default `lwaTV3.py` in the repository root runs on
+the Raspberry Pi without modification, so there is no longer a Pi-specific
+build of the script or a patch to maintain -- just run the top-level
+`lwaTV3.py` and `updateMovies.py`.
 
-build2.sh
----------
-Script to build lwaTV3.rpi.py, a RPi-compatiable version of lwaTV3.py.
+Quick Setup
+-----------
+ 1. Install Raspberry Pi OS with desktop (Bookworm or later) on an 8 GB or
+    larger SD card and walk through the first-boot wizard.
+ 2. Check out the software into your home directory:
+    ```
+    git clone https://github.com/lwa-project/lwatv.git LWATV
+    ```
+ 3. Run the provisioning script:
+    ```
+    bash ~/LWATV/RaspberryPi/setup.sh
+    ```
+    It installs the required packages, populates the movie cache, and installs
+    the desktop autostart entry and the daily movie-update cron job.  It is
+    safe to re-run later to update the machine.
+ 4. Set the two display options that cannot be scripted safely:
+    * Enable automatic login to the desktop (`raspi-config` -> System
+      Options -> Boot / Auto Login).
+    * Disable the screensaver so the display does not blank
+      (Preferences -> Screensaver).
+ 5. Reboot, or launch the GUI immediately with:
+    ```
+    python3 ~/LWATV/lwaTV3.py -a
+    ```
 
-convert3to2.patch
+Manual Setup
+------------
+If you would rather understand the moving parts (or `setup.sh` does not fit
+your setup), here is what it does.
+
+ 1. Install the following packages via `apt`:
+
+     * git
+     * gir1.2-gstreamer-1.0
+     * gir1.2-gst-plugins-base-1.0
+     * gstreamer1.0-plugins-base
+     * gstreamer1.0-plugins-good
+     * gstreamer1.0-plugins-bad
+     * gstreamer1.0-libav
+     * python3
+     * python3-gi
+     * python3-gst-1.0
+     * python3-pil
+     * python3-pil.imagetk
+     * python3-tk
+     * xscreensaver
+
+    `python3-pil.imagetk` is a separate package from `python3-pil` on Debian
+    and is required for the GUI to render images.  The `gir1.2-gst*` typelibs
+    are what `gi.require_version('Gst', ...)` /
+    `gi.require_version('GstVideo', ...)` load at import time, and the
+    `gstreamer1.0-plugins-*`/`-libav` packages provide the demux and H.264
+    decode for the `.mov` movies.
+
+ 2. Populate the movie cache:
+    ```
+    python3 ~/LWATV/updateMovies.py
+    ```
+ 3. Add a `lwatv.desktop` file into `~/.config/autostart` to launch the GUI
+    on login:
+    ```
+    [Desktop Entry]
+    Type=Application
+    Name=LWATV GUI
+    Comment=The LWATV GUI
+    Terminal=false
+    StartupNotify=false
+    Exec=sh -c "sleep 10 && python3 /home/pi/LWATV/lwaTV3.py -a"
+    ```
+ 4. Add the following line to your crontab to update the movies every day at
+    5:10 local time:
+    ```
+    10 5 * * * python3 /home/pi/LWATV/updateMovies.py
+    ```
+
+Changing Channels
 -----------------
-Patch file used by buildRPi.sh to tweak the GStreamer video sink.
+`setup.sh` launches the GUI with `-a`, so the display always follows whatever
+channel the movie cache holds.  To switch stations you therefore only change
+the updater: add `-2` (LWA-SV) or `-4` (LWA-NA) to the `updateMovies.py` line
+in your crontab.  Run `updateMovies.py` once by hand with the new flag to swap
+the cache immediately (otherwise the daily cron job does it), then restart the
+GUI -- a reboot is simplest -- and `-a` brings it back up on the new channel.
+Re-running `setup.sh` resets the crontab to the default channel.
 
-images
-------
-Directory containing stock images used by lwaTV3.rpi.py for when images cannot 
-be downloaded.
-
-info
-----
-Directory containing the text image descriptions used by lwaTV3.rpi.py.
-
-movies
-------
-Directory containing the pre-recorded LWATV movies.  This directory needs
-to be populated by a call to updateMovies.py.
-
-setup
------
-Directory containing another README.md file with more information about how
-to turn a RPi into a stand alone LWATV display.
+Video Sink
+----------
+The Pi uses playbin's default video sink, which embeds correctly into the GUI
+window.  If you ever land on a display stack where the movie does not appear
+inside the window, force an X11 sink via the `LWATV_VIDEO_SINK` environment
+variable, e.g.:
+```
+LWATV_VIDEO_SINK=ximagesink python3 ~/LWATV/lwaTV3.py
+```

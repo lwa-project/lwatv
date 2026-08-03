@@ -1,4 +1,4 @@
-These images show the sky above the first LWA station. They update every few seconds and, if the image isn't updating right now, it's probably because we are running beamformed observations, which we do for many hours every day.
+These images show the sky above the fourth LWA station located at the end of the north arm of the Very Large Array. They update every few seconds and, if the image isn't updating right now, it's probably because we are running beamformed observations, which we do for many hours every day.
 
 Each image shows the full sky, down to the horizon at the image's edge. The left shows the total intensity, and the right shows the intensity of circularly polarized radio waves. At the upper left you can see the average time of the data that went into the image (given in UTC, which is basically the same as Greenwich Mean Time). There is no time gap between the images: we are imaging sky in real time with a 100% duty cycle. At the upper right is the central frequency of the image. In the center is a 100 kHz bandwidth spectrum from a single antenna and polarization; the images are produced from the middle 75 kHz.
 

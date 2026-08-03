@@ -1,495 +1,577 @@
 #!/usr/bin/env python3
 
 """
-Version 3 of a GUI application to show LWATV (gstreamer 1.0).
+Version 3 of a GUI application to show LWATV (Tkinter + GStreamer 1.0).
 """
 
 import os
-import wx
 import sys
-import copy
 import glob
 import math
 import time
+import queue
 import random
 import argparse
+import threading
 from urllib.request import urlopen
-from datetime import datetime
+from datetime import datetime, timezone
 from PIL import Image as PImage
+from PIL import ImageTk
 from io import BytesIO
+
+import tkinter as tk
+import tkinter.font as tkfont
 
 if sys.platform.startswith('linux'):
     import ctypes
     try:
         x11 = ctypes.cdll.LoadLibrary('libX11.so')
         x11.XInitThreads()
-    except:
+    except Exception:
         pass
-        
+
 import gi
 gi.require_version('Gst', '1.0')
 gi.require_version('GstVideo', '1.0')
-from gi.repository import GObject, Gst
+from gi.repository import Gst, GLib
 from gi.repository import GstVideo
 
-GObject.threads_init()
 Gst.init(None)
 
-# Deal with the different wxPython versions
-if 'phoenix' in wx.PlatformInfo:
-    EnableLogging = wx.Log.EnableLogging
-    ClientDC = wx.ClientDC
-    Image = wx.Image
-    Bitmap = wx.Bitmap
-else:
-    EnableLogging = wx.Log_EnableLogging
-    ClientDC = wx.AutoBufferedPaintDC
-    Image = wx.ImageFromStream
-    Bitmap = wx.BitmapFromImage
+# Pillow resampling filter (constant moved to Image.Resampling in Pillow 9.1+)
+try:
+    RESAMPLE = PImage.Resampling.LANCZOS
+except AttributeError:
+    RESAMPLE = PImage.LANCZOS
 
 
-class MoviePlayer(wx.Panel):
+# Paths
+_BASE_PATH = os.path.dirname(os.path.abspath(__file__))
+_INFO_PATH = os.path.join(_BASE_PATH, 'info')
+_IMAGE_PATH = os.path.join(_BASE_PATH, 'images')
+_MOVIE_PATH = os.path.join(_BASE_PATH, 'movies')
+
+
+# Channels
+_CHANNELS = {'lwatv': {'latest_url': 'https://lwalab.phys.unm.edu/lwatv',
+                       'latest_label': 'Latest LWATV Image',
+                       'latest_info': os.path.join(_INFO_PATH, 'lwatv.txt'),
+                       'site_image': os.path.join(_IMAGE_PATH, 'lwa1.jpg'),
+                       'site_label': 'The LWA1 Site Located by the VLA'
+                      },
+             'lwatv2': {'latest_url': 'https://lwalab.phys.unm.edu/lwatv2',
+                        'latest_label': 'Latest LWATV2 Image',
+                        'latest_info': os.path.join(_INFO_PATH, 'lwatv2.txt'),
+                        'site_image': os.path.join(_IMAGE_PATH, 'lwasv.jpg'),
+                        'site_label': 'The LWA-SV Site Located on the Sevilleta NWR'
+                       },
+             'lwatv4': {'latest_url': 'https://lwalab.phys.unm.edu/lwatv4',
+                        'latest_label': 'Latest LWATV4 Image',
+                        'latest_info': os.path.join(_INFO_PATH, 'lwatv4.txt'),
+                        'site_image': os.path.join(_IMAGE_PATH, 'lwana.jpg'),
+                        'site_label': 'The LWA-NA Site Located by the VLA'
+                       }
+            }
+
+
+class MoviePlayer(tk.Label):
     """
-    wx.Panel object to deal with playing the old movies.
-    
-    Based on:
-        Example 2.2 http://pygstdocs.berlios.de/pygst-tutorial/playbin.html
+    tk.Label object to deal with playing the old movies.
+
+    Two rendering strategies are used depending on the windowing system:
+
+      * X11 (Linux, incl. the Raspberry Pi): the video sink renders directly
+        into this widget's native window - efficient, hardware-friendly.
+      * everything else (macOS/Aqua): winfo_id() is not an X11 window, so
+        decoded RGB frames are pulled from an appsink and painted into the
+        Label as images.
     """
-    
-    def __init__(self, parent, moviePath, label, verbose=False):
-        super(MoviePlayer, self).__init__(parent, -1, style=wx.EXPAND)
-        
-        self.moviePath = moviePath
+
+    def __init__(self, parent, label, verbose=False):
+        super().__init__(parent, bg='black', bd=0, highlightthickness=0)
+
         self.label = label
         self.verbose = verbose
-        self.SetBackgroundColour(wx.BLACK)
-        self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
-        
+        self._frame = None
+        self.window_id = None
+        self._embed = (self.tk.call('tk', 'windowingsystem') == 'x11')
+
         self.pipeline = Gst.Pipeline()
         self.player = Gst.ElementFactory.make("playbin", None)
+
         bus = self.pipeline.get_bus()
         bus.add_signal_watch()
-        bus.enable_sync_message_emission()
         bus.connect('message::eos', self.on_eos_message)
         bus.connect('message::error', self.on_error_message)
-        bus.connect('sync-message::element', self.on_sync_message)
+
+        if self._embed:
+            # Hand the video sink this widget's X window once it is mapped.  The
+            # sync-message handler runs on the GStreamer streaming thread and
+            # must not touch Tk, so the id is read on the Tk thread and cached.
+            bus.enable_sync_message_emission()
+            bus.connect('sync-message::element', self.on_sync_message)
+            self.bind('<Map>', self._on_map)
+            # playbin picks a sensible sink by default, but allow it to be
+            # overridden (e.g. LWATV_VIDEO_SINK=ximagesink) for platforms where
+            # the default does not embed via GstVideoOverlay.
+            sinkName = os.environ.get('LWATV_VIDEO_SINK', None)
+            if sinkName:
+                vs = Gst.ElementFactory.make(sinkName, None)
+                if vs is not None:
+                    self.player.set_property("video-sink", vs)
+                elif self.verbose:
+                    print(f"Could not create video sink '{sinkName}'; using default")
+        else:
+            # Grab decoded video as raw RGB frames instead of a native window.
+            self.appsink = Gst.ElementFactory.make("appsink", None)
+            self.appsink.set_property("caps", Gst.Caps.from_string("video/x-raw,format=RGB"))
+            self.appsink.set_property("max-buffers", 1)
+            self.appsink.set_property("drop", True)
+            self.player.set_property("video-sink", self.appsink)
+
         self.pipeline.add(self.player)
-        if sys.platform == 'darwin':
-            vs = Gst.ElementFactory.make("ximagesink", None)
-            self.player.set_property("video-sink", vs)
-            
+
+        # Tkinter has no GLib main loop of its own, so pump the default GLib
+        # context from the Tk event loop to keep the bus signals (eos/error)
+        # flowing.
+        self.after(50, self._pump_gst)
+        if not self._embed:
+            self.after(33, self._render_frames)
+
+    def _pump_gst(self):
+        ctx = GLib.MainContext.default()
+        while ctx.pending():
+            ctx.iteration(False)
+        self.after(50, self._pump_gst)
+
+    def _on_map(self, event=None):
+        # Cache the native window id now that the frame exists on the display
+        self.window_id = self.winfo_id()
+
+    def on_sync_message(self, bus, message):
+        if message.get_structure().get_name() == 'prepare-window-handle':
+            message.src.set_property('force-aspect-ratio', True)
+            if self.window_id is not None:
+                message.src.set_window_handle(self.window_id)
+
+    def _render_frames(self):
+        try:
+            sample = self.appsink.emit('try-pull-sample', 0)
+        except Exception:
+            sample = None
+        if sample is not None:
+            self._show_sample(sample)
+        self.after(33, self._render_frames)
+
+    def _show_sample(self, sample):
+        caps = sample.get_caps()
+        st = caps.get_structure(0)
+        okw, w = st.get_int('width')
+        okh, h = st.get_int('height')
+        if not (okw and okh):
+            return
+
+        buf = sample.get_buffer()
+        ok, minfo = buf.map(Gst.MapFlags.READ)
+        if not ok:
+            return
+        try:
+            expected = w*h*3
+            if minfo.size < expected:
+                return
+            image = PImage.frombytes('RGB', (w, h), bytes(minfo.data[:expected]))
+        finally:
+            buf.unmap(minfo)
+
+        # Scale to fit the panel while preserving the aspect ratio
+        ww, hh = self.winfo_width(), self.winfo_height()
+        if ww > 1 and hh > 1:
+            s = min(ww/float(w), hh/float(h))
+            image = image.resize((max(1, int(round(w*s))), max(1, int(round(h*s)))),
+                                 RESAMPLE)
+
+        photo = ImageTk.PhotoImage(image)
+        self.config(image=photo)
+        self._frame = photo
+
     def on_eos_message(self, bus, message):
         if self.verbose:
             print("Finished movie")
         self.pipeline.set_state(Gst.State.NULL)
-        
-        self.update()
-        
+
+        self.after(0, self.advance)
+
     def on_error_message(self, bus, message):
         err, debug = message.parse_error()
-        print("Error %s: %s" % (err, debug))
-        
+        print(f"Error {err}: {debug}")
+
         self.pipeline.set_state(Gst.State.NULL)
-        wx.CallAfter(self.update)
-        
-    def on_sync_message(self, bus, message):
-        if message.get_structure().get_name() == 'prepare-window-handle':
-            message.src.set_property('force-aspect-ratio', True)
-            message.src.set_window_handle(self.GetHandle())
-            
+        self.after(0, self.advance)
+
     def get_movie(self):
-        movies = glob.glob(os.path.join(self.moviePath, '*.mov'))
+        movies = glob.glob(os.path.join(_MOVIE_PATH, '*.mov'))
         movies.sort()
         movie = random.choice(movies)
-        
+
         if self.verbose:
-            print("Next movie is %s" % movie)
+            print(f"Next movie is {movie}")
         return movie
-        
-    def update(self):
-        isPlaying = False
-        for state in self.pipeline.get_state(0):
-            if type(state) != type(Gst.State.PLAYING):
-                continue
-            if state == Gst.State.PLAYING:
-                isPlaying = True
-                break
-                
+
+    def advance(self):
+        # When embedding, do not start a movie until the frame is mapped and its
+        # window handle is known, or the video sink gets a bad/undefined window.
+        if self._embed and self.window_id is None:
+            self.after(100, self.advance)
+            return
+
+        _, state, _ = self.pipeline.get_state(0)
+        isPlaying = (state == Gst.State.PLAYING)
+
         if not isPlaying:
             movie = self.get_movie()
             movieBase = os.path.basename(movie)
             mjd = int(movieBase.split('.', 1)[0])
             jd = mjd + 2400000.5
             t = (jd - 2440587.5)*86400.0
-            dt = datetime.utcfromtimestamp(t)
-            mn = dt.strftime("%B")
-            dy = int(dt.strftime("%d"))
-            yr = int(dt.strftime("%Y"))
-            datestr = "%s %i, %i" % (mn, dy, yr)
-            self.label.SetLabel("Movie for %s" % datestr)		
-            
+            dt = datetime.fromtimestamp(t, tz=timezone.utc)
+            self.label.config(text=f"Movie for {dt.strftime('%B')} {dt.day}, {dt.year}")
+
             self.pipeline.set_state(Gst.State.NULL)
-            self.player.set_property('uri', "file://%s" % movie)
+            self.player.set_property('uri', f"file://{movie}")
             self.pipeline.set_state(Gst.State.PLAYING)
-            
+
     def stop(self):
         self.pipeline.set_state(Gst.State.NULL)
 
 
-LATEST_TIMER = 101
-MOVIE_TIMER = 102
+class LWATV(tk.Tk):
+    def __init__(self, args, title="LWATV GUI", config=None):
+        super().__init__()
+        self.title(title)
+        self.geometry("1310x840")
+        self.configure(bg='black')
 
-class LWATV(wx.Frame):
-    def __init__(self, parent, title, args, config={}):
-        wx.Frame.__init__(self, parent, title=title, size=(1310, 840))
-        
         # Configuration
         self.args = args
-        self.config = config
-        self.config['imageMode'] = ''
-        
-        # Paths
-        basePath = os.path.dirname(os.path.abspath(__file__))
-        self.infoPath = os.path.join(basePath, 'info')
-        self.imagePath = os.path.join(basePath, 'images')
-        self.moviePath = os.path.join(basePath, 'movies')
-        
-        # Build the images
-        self.initUI()
-        self.initEvents()
-        self.Show()
+        self.config = config if config is not None else {}
+
+        # Site info
+        self.lwatv_config = _CHANNELS['lwatv']
+        if args.lwatv4:
+            self.lwatv_config = _CHANNELS['lwatv4']
+        elif args.lwatv2:
+            self.lwatv_config = _CHANNELS['lwatv2']
+
+        # Build the UI
+        self.init_ui()
+        self.init_events()
         if not self.args.disable_maximize:
-            self.Maximize()
-            
+            try:
+                self.wm_attributes('-zoomed', True)
+            except tk.TclError:
+                self.update_idletasks()
+                sw = self.winfo_screenwidth()
+                sh = self.winfo_screenheight()
+                self.geometry(f"{sw}x{sh}+0+0")
+
         # Update
-        self.initImages()
-        self.updateTextSize()
-        
-    def initUI(self):	
-        panel = wx.Panel(self, -1)
-        panel.SetForegroundColour(wx.WHITE)
-        panel.SetBackgroundColour(wx.BLACK)
-        
-        sizer = wx.GridBagSizer(0, 0)
+        self.init_images()
+        self.update_text_size()
+
+    def _panel(self, **gridopts):
+        # A frame whose size is dictated solely by its grid cell, never by the
+        # content packed inside it.  This stops images/movies/text from
+        # inflating their columns and skewing the overall proportions.
+        frame = tk.Frame(self.container, bg='black', width=1, height=1)
+        frame.grid(**gridopts)
+        frame.grid_propagate(False)
+        frame.pack_propagate(False)
+        return frame
+
+    def init_ui(self):
+        container = tk.Frame(self, bg='black')
+        container.pack(fill='both', expand=True)
+        self.container = container
+
         ih = 6
         iw = 6
         tw = 2
-        iflags = wx.EXPAND|wx.LEFT|wx.RIGHT
-        
-        font = wx.SystemSettings.GetFont(wx.SYS_SYSTEM_FONT)
-        font.SetPointSize(font.GetPointSize()+2)
-        
+
+        # Fonts (copies so we can resize them without touching the shared
+        # named fonts)
+        base = tkfont.nametofont('TkDefaultFont')
+        bsize = base.cget('size')
+        labelFont = tkfont.Font(font=base)
+        labelFont.configure(size=(bsize + 2) if bsize > 0 else (bsize - 2))
+        self.descFont = tkfont.Font(font=base)
+
         # Latest LWATV Image
         ## Label
-        self.latestText = wx.StaticText(panel, label="Latest LWATV Image")
-        self.latestText.SetFont(font)
-        self.latestText.SetForegroundColour(wx.WHITE)
-        self.latestText.SetBackgroundColour(wx.BLACK)
-        sizer.Add(self.latestText, (0, 0), (1, iw), wx.ALIGN_CENTER|wx.ALIGN_CENTER_VERTICAL|wx.ALL, 4)
+        self.latestText = tk.Label(container, text="Latest LWATV Image",
+                                   fg='white', bg='black', font=labelFont)
+        self.latestText.grid(row=0, column=0, columnspan=iw, padx=4, pady=4)
         ## Image
-        self.latestImage = wx.Panel(panel, -1)
-        self.latestImage.SetBackgroundColour(wx.BLACK)
-        self.latestImage.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
-        sizer.Add(self.latestImage, (1, 0), (ih//2, iw), iflags|wx.BOTTOM, 4)
-        
-        # LWA1 Station Image
+        latestFrame = self._panel(row=1, column=0, rowspan=ih//2, columnspan=iw,
+                                  sticky='nsew', padx=4, pady=(0, 4))
+        self.latestImage = tk.Label(latestFrame, bg='black', bd=0, highlightthickness=0)
+        self.latestImage.pack(fill='both', expand=True)
+
+        # LWA1/LWA-SV Station Image
         if not self.args.disable_movie:
             siw = iw//2
         else:
             siw = iw
         ## Label
-        if self.args.lwatv2:
-            stationText = wx.StaticText(panel, label="The LWA-SV Site Located on the Sevilleta NWR")
-        else:
-            stationText = wx.StaticText(panel, label="The LWA1 Site Located By the VLA")
-        stationText.SetFont(font)
-        stationText.SetForegroundColour(wx.WHITE)
-        stationText.SetBackgroundColour(wx.BLACK)
-        sizer.Add(stationText, (2+ih, 0), (1, siw), wx.ALIGN_CENTER|wx.ALIGN_CENTER_VERTICAL|wx.ALL, 4)
+        stationLabel = self.lwatv_config['site_label']
+        stationText = tk.Label(container, text=stationLabel,
+                               fg='white', bg='black', font=labelFont)
+        stationText.grid(row=2+ih, column=0, columnspan=siw, padx=4, pady=4)
         ## Image
-        self.stationImage = wx.Panel(panel, -1)
-        self.stationImage.SetBackgroundColour(wx.BLACK)
-        self.stationImage.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
-        sizer.Add(self.stationImage, (2+ih//2, 0), (ih//2, siw), iflags, 4)
-        
+        stationFrame = self._panel(row=2+ih//2, column=0, rowspan=ih//2, columnspan=siw,
+                                   sticky='nsew', padx=4)
+        self.stationImage = tk.Label(stationFrame, bg='black', bd=0, highlightthickness=0)
+        self.stationImage.pack(fill='both', expand=True)
+
         if not self.args.disable_movie:
             # Previously Recorded Movies
             ## Label
-            self.movieText = wx.StaticText(panel, label="Previous Movies")
-            self.movieText.SetFont(font)
-            self.movieText.SetForegroundColour(wx.WHITE)
-            self.movieText.SetBackgroundColour(wx.BLACK)
-            sizer.Add(self.movieText, (2+ih, iw//2), (1, iw//2), wx.ALIGN_CENTER|wx.ALIGN_CENTER_VERTICAL|wx.ALL, 4)
+            self.movieText = tk.Label(container, text="Previous Movies",
+                                      fg='white', bg='black', font=labelFont)
+            self.movieText.grid(row=2+ih, column=iw//2, columnspan=iw//2, padx=4, pady=4)
             ## Movie
-            self.previousMovie = MoviePlayer(panel, self.moviePath, self.movieText, self.args.verbose)
-            sizer.Add(self.previousMovie, (2+ih//2, iw//2), (ih//2, iw//2), iflags, 4)
-            
+            movieFrame = self._panel(row=2+ih//2, column=iw//2, rowspan=ih//2,
+                                     columnspan=iw//2, sticky='nsew', padx=4)
+            self.previousMovie = MoviePlayer(movieFrame,
+                                             self.movieText, self.args.verbose)
+            self.previousMovie.pack(fill='both', expand=True)
+
         # Image Information
         ## Label
-        descriptionLabel = wx.StaticText(panel, label="Image Description")
-        descriptionLabel.SetFont(font)
-        descriptionLabel.SetForegroundColour(wx.WHITE)
-        descriptionLabel.SetBackgroundColour(wx.BLACK)
-        sizer.Add(descriptionLabel, (0, iw), (1, tw), wx.ALIGN_CENTER|wx.ALIGN_CENTER_VERTICAL|wx.ALL, 4)
+        descriptionLabel = tk.Label(container, text="Image Description",
+                                    fg='white', bg='black', font=labelFont)
+        descriptionLabel.grid(row=0, column=iw, columnspan=tw, padx=4, pady=4)
         ## Content
-        self.descriptionText =  wx.TextCtrl(panel, -1, "Image description here.", style=wx.TE_MULTILINE|wx.TE_READONLY)
-        if sys.platform != 'darwin':
-            self.descriptionText.SetForegroundColour(wx.WHITE)
-            self.descriptionText.SetBackgroundColour(wx.BLACK)
-        sizer.Add(self.descriptionText, (1, iw), (ih, tw), wx.EXPAND|wx.ALL, 10)
-        ## LWA1 Label
-        lwa1Label = wx.StaticText(panel, label="Copyright (c) 2026 The LWA Consortium")
-        lwa1Label.SetForegroundColour(wx.WHITE)
-        lwa1Label.SetBackgroundColour(wx.BLACK)
-        sizer.Add(lwa1Label, (2+ih, iw), (1, tw), wx.ALIGN_CENTER|wx.ALIGN_CENTER_VERTICAL|wx.ALL, 4)
-        
-        # Make sure that the sizer knows that the rows and columns can grow
+        descFrame = self._panel(row=1, column=iw, rowspan=ih, columnspan=tw,
+                                sticky='nsew', padx=10, pady=10)
+        self.descriptionText = tk.Text(descFrame, wrap='word', fg='white', bg='black',
+                                       bd=0, highlightthickness=1,
+                                       highlightbackground='gray60', highlightcolor='gray60',
+                                       font=self.descFont, insertbackground='white',
+                                       padx=6, pady=6, width=1, height=1)
+        self.descriptionText.insert('1.0', "Image description here.")
+        self.descriptionText.config(state='disabled')
+        self.descriptionText.pack(fill='both', expand=True)
+        ## Copyright Label
+        copyrightLabel = tk.Label(container, text="Copyright (c) 2026 The LWA Consortium",
+                                  fg='white', bg='black')
+        copyrightLabel.grid(row=2+ih, column=iw, columnspan=tw, padx=4, pady=4)
+
+        # Make sure that the grid knows that the rows and columns can grow.  The
+        # image/movie panels live inside geometry-propagation-disabled frames
+        # (see _panel) so their content cannot inflate their columns, which lets
+        # these equal weights reproduce the proportions of the original wx
+        # GridBagSizer (images 6 columns, description 2 columns).
         for i in range(iw+tw):
-            sizer.AddGrowableCol(i)
+            container.grid_columnconfigure(i, weight=1)
         for i in range(1, ih+1):
-            sizer.AddGrowableRow(i)
-            
-        sizer2 = wx.BoxSizer(wx.VERTICAL)
-        sizer2.Add(sizer, 1, wx.EXPAND, 0)
-        panel.SetSizer(sizer2)
-        panel.Layout()
-        self.panel = panel
-        
-        sizer3 = wx.BoxSizer(wx.VERTICAL)
-        sizer3.Add(panel, 1, wx.EXPAND, 0)
-        self.SetSizer(sizer3)
-        self.Layout()
-        
-    def initEvents(self):
-        # Resize and repaint events
-        self.Bind(wx.EVT_SIZE, self.onSize)
-        self.Bind(wx.EVT_PAINT, self.onPaint)
-        self.latestImage.Bind(wx.EVT_PAINT, self.onPaint)
-        self.stationImage.Bind(wx.EVT_PAINT, self.onPaint)
-        
+            container.grid_rowconfigure(i, weight=1)
+
+    def init_events(self):
+        # Re-render images when their panels are resized
+        self.latestImage.bind('<Configure>', self.update_latest_image)
+        self.stationImage.bind('<Configure>', self.update_station_image)
+        self.descriptionText.bind('<Configure>', lambda e: self.update_text_size())
+
         # Window manager close
-        self.Bind(wx.EVT_CLOSE, self.onQuit)
-        
-        # Timers
-        ## Latest Image
-        self.latestTimer = wx.Timer(self, LATEST_TIMER)
-        self.Bind(wx.EVT_TIMER, self.updateLatestImage)
-        
-    def initImages(self):
+        self.protocol('WM_DELETE_WINDOW', self.on_quit)
+
+    def init_images(self):
         # Update the images, movie, and text
-        self.updateLatestImage()
-        self.updateStationImage()
-        self.updateImageDescription()
-        
-        # Start the timers
-        if self.args.enable_fade:
-            lift = 200
-        else:
-            lift = 5000
-        self.latestTimer.Start(lift)
+        self._fetching = False
+        self.latestImageTime = 0.0
+        self._latestQueue = queue.Queue()
+        self._fetch_latest_async()      # first live image (in the background)
+        self.update_station_image()
+        self.update_image_description()
+
+        # Start the recurring latest-image refresh and the queue drainer that
+        # applies finished downloads back on the main thread
+        self._latestJob = self.after(self._latest_interval(), self._tick_latest)
+        self._drainJob = self.after(100, self._drain_latest)
         if not self.args.disable_movie:
-            wx.CallAfter(self.updatePreviousMovie)
-            
-    def onSize(self, event):
-        self.panel.Layout()
-        self.Layout()
-        self.panel.Update()
-        self.Update()
-        
-        self.updateLatestImage()
-        self.updateStationImage()
-        self.updateTextSize()
-        
-    def onPaint(self, event):
-        self.panel.Update()
-        self.Update()
-        
-        self.updateLatestImage()
-        self.updateStationImage()
-        
-    def onQuit(self, event):
-        self.latestTimer.Stop()
+            self.after(0, self.update_previous_movie)
+
+    def _drain_latest(self):
+        try:
+            while True:
+                result = self._latestQueue.get_nowait()
+                self._apply_latest(*result)
+        except queue.Empty:
+            pass
+        self._drainJob = self.after(100, self._drain_latest)
+
+    def _latest_interval(self):
+        return 200 if self.args.enable_fade else 5000
+
+    def _tick_latest(self):
+        # Kick off a fresh download when due (never blocks the event loop, so
+        # the movie keeps playing), then re-render to drive the fade animation.
+        if not self._fetching and time.time() - self.latestImageTime > 5:
+            self._fetch_latest_async()
+        self.update_latest_image()
+        self._latestJob = self.after(self._latest_interval(), self._tick_latest)
+
+    def on_quit(self, event=None):
+        for attr in ('_latestJob', '_drainJob'):
+            job = getattr(self, attr, None)
+            if job is not None:
+                try:
+                    self.after_cancel(job)
+                except Exception:
+                    pass
         if not self.args.disable_movie:
             self.previousMovie.stop()
-        self.Destroy()
-        
-    def loadStationImage(self):
-        if self.args.lwatv2:
-            fh = open(os.path.join(self.imagePath, 'lwasv.jpg'), 'rb')
-        else:
-            fh = open(os.path.join(self.imagePath, 'lwa1.jpg'), 'rb')
-        data = fh.read()
-        fh.close()
-        
-        self.wxStationImage = Image(BytesIO(data))
-        
-    def loadLatestImage(self):
-        if self.args.lwatv2:
-            url = 'https://lwalab.phys.unm.edu/lwatv2/lwatv.png?lwatvgui=%s' % int(time.time())
-            urlAlt = 'https://lwalab.phys.unm.edu/lwatv2/beamPointings.png?lwatvgui=%s' % int(time.time())
-        else:
-            url = 'https://lwalab.phys.unm.edu/lwatv/lwatv.png?lwatvgui=%s' % int(time.time())
-            urlAlt = 'https://lwalab.phys.unm.edu/lwatv/beamPointings.png?lwatvgui=%s' % int(time.time())
-        
-        latestResult = "Download at %s" % url
+        self.destroy()
+
+    def load_station_image(self):
+        path = self.lwatv_config['site_image']
+        self.pilStationImage = PImage.open(path).convert('RGB')
+
+    def _fetch_latest_async(self):
+        # Download + decode on a worker thread so the network wait never stalls
+        # the Tk event loop (which would freeze the appsink movie playback).
+        self._fetching = True
+        self.latestImageTime = time.time()
+
+        def work():
+            # Hand the result back through a thread-safe queue; the main-thread
+            # drainer applies it (Tk must only be touched from the main thread).
+            self._latestQueue.put(self._download_latest())
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _download_latest(self):
+        # Runs on a worker thread: must not touch any Tk widgets.
+        url = f"{self.lwatv_config['latest_url']}/lwatv.png?lwatvgui={time.time():.0f}"
+
+        log = f"Download at {url}"
         try:
-            # Try to get the latest image...
-            fh = urlopen(url)
-            data = fh.read()
-            fh.close()
-            
-            info = fh.info()
-            lm = info.get("last-modified")
-            lm = datetime.strptime(lm, "%a, %d %b %Y %H:%M:%S GMT")
-            age = datetime.utcnow() - lm
-            age = age.days*24*3600 + age.seconds
-            
-            # Is the image recent enough to think that TBN/PASI is running?
-            if age > 120:
-                fh = urlopen(urlAlt)
+            with urlopen(url) as fh:
+                info = fh.info()
                 data = fh.read()
-                fh.close()
-                
-                latestResult = latestResult+" -> LASI is not currently running"
-                
-                self.config['imageMode'] = 'Beams'
-                self.latestText.SetLabel("Current Beam Pointings")
-            else:
-                self.config['imageMode'] = 'LWATV'
-                if self.args.lwatv2:
-                    self.latestText.SetLabel("Latest LWATV2 Image")
-                else:
-                    self.latestText.SetLabel("Latest LWATV Image")
-                
-        except:
+
+            lm = info.get("last-modified")
+            lm = datetime.strptime(lm, "%a, %d %b %Y %H:%M:%S GMT").replace(tzinfo=timezone.utc)
+            age = datetime.now(tz=timezone.utc) - lm
+            age = age.days*24*3600 + age.seconds
+
+            # Is the image recent enough to think that the station is running?
+            if age > 120:
+                # Reachable, but stale -> the station is not currently running
+                image = PImage.open(os.path.join(_IMAGE_PATH, 'error.png')).convert('RGB')
+                return ("LWATV is not currently running",
+                        image, f"{log} -> not currently running")
+
+            image = PImage.open(BytesIO(data)).convert('RGB')
+            label = self.lwatv_config['latest_label']
+            return (label, image, log)
+
+        except Exception:
             # Deal with network/download errors
-            fh = open(os.path.join(self.imagePath, 'error.png'), 'r')
-            data = fh.read()
-            fh.close()
-            
-            latestResult = latestResult+" -> error"
-            self.latestText.SetLabel("Network Connection Error")
-            
-        if self.args.verbose:
-            print(latestResult)
-        self.wxLatestImage = Image(BytesIO(data))
-        
+            image = PImage.open(os.path.join(_IMAGE_PATH, 'error.png')).convert('RGB')
+            return ("Network Connection Error", image, f"{log} -> error")
+
+    def _apply_latest(self, labelText, image, log):
+        # Runs back on the Tk main thread once the download finishes.
+        if self.args.enable_fade and getattr(self, "pilLatestImage", None) is not None:
+            self.pilLatestImageOld = self.pilLatestImage
+        self.pilLatestImage = image
         if self.args.enable_fade:
             self.pilLatestImageTime = time.time()
-            self.pilLatestImage = PImage.open(BytesIO(data))
-            self.pilLatestImage = self.pilLatestImage.convert('RGB')
-            
-    def loadImageDescription(self):
-        if self.args.lwatv2:
-            fh = open(os.path.join(self.infoPath, 'lwatv2.txt'))
-        else:
-            fh = open(os.path.join(self.infoPath, 'lwatv.txt'))
-        data1 = fh.read()
-        fh.close()
-        
-        fh = open(os.path.join(self.infoPath, 'beams.txt'))
-        data2 = fh.read()
-        fh.close()
-        
-        self.imageDescriptionLWATV = data1
-        self.imageDescriptionBeams = data2
-        
-    def _keepAspect(self, image, panel):
-        wi,hi = image.GetSize()
-        wd,hd = panel.GetSize()
-        
+        self.latestText.config(text=labelText)
+        self._fetching = False
+
+        if self.args.verbose:
+            print(log)
+
+        self.update_latest_image()
+
+    def load_image_description(self):
+        descname = self.lwatv_config['latest_info']
+        with open(descname, 'r') as fh:
+            self.imageDescription = fh.read()
+
+    def _keep_aspect(self, size, widget):
+        wi, hi = size
+        wd, hd = widget.winfo_width(), widget.winfo_height()
+
         wr = 1.0*wd/wi
         hr = 1.0*hd/hi
         s = min([wr, hr])
         return int(round(wi*s)), int(round(hi*s))
-        
-    def updateStationImage(self, event=None):
-        if getattr(self, "wxStationImage", None) is None:
-            self.loadStationImage()
-            
-        w, h = self._keepAspect(self.wxStationImage, self.stationImage)
-        image = self.wxStationImage.Scale(w, h, wx.IMAGE_QUALITY_NORMAL)
-        w2, h2 = self.stationImage.GetSize()
-        image.Resize(self.stationImage.GetSize(), ((w2-w)//2, (h2-h)//2), 0, 0, 0)
-        bitmap = Bitmap(image)
-        
-        dc = ClientDC(self.stationImage)
-        dc.DrawBitmap(bitmap, 0, 0)
-        
-    def updateLatestImage(self, event=None, fade=False):
-        oldMode = self.config['imageMode']
-        
-        if getattr(self, "wxLatestImage", None) is None:
-            self.latestImageTime = time.time()
-            self.loadLatestImage()
-            if self.args.enable_fade:
-                self.pilLatestImageOld = self.pilLatestImage
-                
-        if time.time() - self.latestImageTime > 5:
-            self.latestImageTime = time.time()
-            if self.args.enable_fade:
-                self.pilLatestImageOld = self.pilLatestImage
-            self.loadLatestImage()
-            
-        if self.args.enable_fade:
-            if time.time()-self.pilLatestImageTime < self.config['fadeTime']:
-                alpha = (time.time() - self.pilLatestImageTime)/self.config['fadeTime']
-                try:
-                    pilImage = PImage.blend(self.pilLatestImageOld, self.pilLatestImage, alpha)
-                    pilImage = pilImage.convert('RGB')
-                except ValueError:
-                    pilImage = self.pilLatestImage
-            else:
-                pilImage = self.pilLatestImage
-                
-            # Convert to wxImage
-            wxImage = wx.EmptyImage( *pilImage.size  )
-            wxImage.SetData(pilImage.tobytes())
+
+    def _render_image(self, pil, widget):
+        if widget.winfo_width() <= 1 or widget.winfo_height() <= 1:
+            return
+        w, h = self._keep_aspect(pil.size, widget)
+        if w <= 0 or h <= 0:
+            return
+        image = pil.resize((w, h), RESAMPLE)
+        photo = ImageTk.PhotoImage(image)
+        widget.config(image=photo)
+        widget.image = photo
+
+    def update_station_image(self, event=None):
+        if getattr(self, "pilStationImage", None) is None:
+            self.load_station_image()
+        self._render_image(self.pilStationImage, self.stationImage)
+
+    def update_latest_image(self, event=None):
+        # Render-only; the actual download happens asynchronously elsewhere.
+        if getattr(self, "pilLatestImage", None) is None:
+            return
+
+        if self.args.enable_fade and getattr(self, "pilLatestImageOld", None) is not None \
+                and time.time() - self.pilLatestImageTime < self.config['fadeTime']:
+            alpha = (time.time() - self.pilLatestImageTime)/self.config['fadeTime']
+            try:
+                pil = PImage.blend(self.pilLatestImageOld, self.pilLatestImage, alpha)
+            except ValueError:
+                pil = self.pilLatestImage
         else:
-            wxImage = self.wxLatestImage
-            
-        w, h = self._keepAspect(wxImage, self.latestImage)
-        image = wxImage.Scale(w, h, wx.IMAGE_QUALITY_NORMAL)
-        w2, h2 = self.latestImage.GetSize()
-        image.Resize(self.latestImage.GetSize(), ((w2-w)//2, (h2-h)//2), 0, 0, 0)
-        bitmap = Bitmap(image)
-        
-        dc = ClientDC(self.latestImage)
-        dc.DrawBitmap(bitmap, 0, 0)
-        
-        if oldMode != self.config['imageMode']:
-            if self.args.verbose:
-                print("Image mode changed, triggering description update")
-            wx.CallAfter(self.updateImageDescription)
-            
-    def updatePreviousMovie(self, event=None):
-        self.previousMovie.update()
-        
-    def updateImageDescription(self, event=None):
-        if getattr(self, "imageDescriptionLWATV", None) is None:
-            self.loadImageDescription()
-            
-        if self.config['imageMode'] == 'LWATV':
-            self.descriptionText.SetValue(self.imageDescriptionLWATV)
-        else:
-            self.descriptionText.SetValue(self.imageDescriptionBeams)
-        wx.CallAfter(self.updateTextSize)
-        
-    def updateTextSize(self):
+            pil = self.pilLatestImage
+
+        self._render_image(pil, self.latestImage)
+
+    def update_previous_movie(self, event=None):
+        self.previousMovie.advance()
+
+    def update_image_description(self, event=None):
+        if getattr(self, "imageDescription", None) is None:
+            self.load_image_description()
+
+        self.descriptionText.config(state='normal')
+        self.descriptionText.delete('1.0', 'end')
+        self.descriptionText.insert('1.0', self.imageDescription)
+        self.descriptionText.config(state='disabled')
+        self.after(0, self.update_text_size)
+
+    def update_text_size(self):
         # Get the area of the text box
-        w,h = self.descriptionText.GetSize()
+        w, h = self.descriptionText.winfo_width(), self.descriptionText.winfo_height()
         ta = w*h
-        
-        # Get the base font
-        font = wx.SystemSettings.GetFont(wx.SYS_SYSTEM_FONT)
-        
-        # Find the "right" font size to use and use it
+
+        text = self.descriptionText.get('1.0', 'end-1c')
+        if not text or ta <= 1:
+            return
+
+        # Find the "right" font size to use and use it.  The divisor is a
+        # packing fudge factor: smaller -> larger text.
         def area2points(area, text):
             points = math.sqrt(area/(1.5*len(text)))
             points = math.floor(points)
             return int(points)
-        font.SetPointSize( area2points(ta, self.descriptionText.GetValue()) )
-        self.descriptionText.SetFont(font)
+        self.descFont.configure(size=max(1, area2points(ta, text)))
 
 
 if __name__ == "__main__":
@@ -504,25 +586,51 @@ if __name__ == "__main__":
                         help='disable automatic maximization of the window')
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='dislay GUI status messages')
-    parser.add_argument('-2', '--lwatv2', action='store_true',
+    sgroup = parser.add_mutually_exclusive_group(required=False)
+    sgroup.add_argument('-a', '--auto-select', action='store_true',
+                        help='show data based on what movies are downloaded')
+    sgroup.add_argument('-2', '--lwatv2', action='store_true',
                         help='show data from LWA-SV instead of LWA1')
+    sgroup.add_argument('-4', '--lwatv4', action='store_true',
+                        help='show data from LWA-NA instead of LWA1')
     args = parser.parse_args()
     
+    # Figure out what channel we've been asked to show
+    channel = 'lwatv'
+    if args.lwatv2:
+        channel = 'lwatv2'
+    elif args.lwatv4:
+        channel = 'lwatv4'
+
     # Check for movies
-    basePath = os.path.dirname(os.path.abspath(__file__))
-    moviePath = os.path.join(basePath, 'movies')
-    movies = glob.glob(os.path.join(moviePath, '*.mov'))
+    chan_filename = os.path.join(_MOVIE_PATH, 'channel')
+    movies = glob.glob(os.path.join(_MOVIE_PATH, '*.mov'))
     if len(movies) == 0:
+        ## No movies
         print("WARNING: No movies found under 'movies/', disabling movie panel.")
         print("         To enable the movie panel, run 'updateMovies.py' and   ")
         print("         restart this script.                                   ")
-        args.disable_movies = True
+        args.disable_movie = True
         
-    print("Starting %s with PID %i" % (os.path.basename(__file__), os.getpid()))
-    
-    # Suppress various error popups
-    EnableLogging(False)
-    
-    app = wx.App()
-    LWATV(None, title="LWATV GUI", args=args, config={'fadeTime': 1.5})
-    app.MainLoop()
+    elif os.path.exists(chan_filename):
+        ## Movies: pull out what movies we have and then figure out what to do
+        with open(chan_filename, 'r') as fh:
+            sel_chan = fh.read().strip()
+
+        ## Auto-select: update channel based on the contents of the 'movies/channel' file
+        if args.auto_select:
+            channel = sel_chan if sel_chan in _CHANNELS else 'lwatv'
+
+        elif channel != sel_chan:
+            print(f"WARNING: The movies found under 'movies/' are for {sel_chan}")
+            print("         To enable the movie panel, run 'updateMovies.py' with")
+            print("         the correct channel selected and restart this script.")
+            args.disable_movie = True
+
+    # Push the resolved channel back into the args and report
+    args.lwatv2 = (channel == 'lwatv2')
+    args.lwatv4 = (channel == 'lwatv4')
+    print(f"Starting {os.path.basename(__file__)} with channel '{channel}' with PID {os.getpid()}")
+
+    app = LWATV(args=args, config={'fadeTime': 1.5})
+    app.mainloop()

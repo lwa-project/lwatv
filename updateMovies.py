@@ -8,30 +8,34 @@ script.
 import os
 import sys
 import glob
-import math
 import time
 import argparse
 from urllib.request import urlopen
 
 
-# Number of days worth of movies to keep on hand for replaying
-_DAYS_TO_STORE = 7
-
-
 # Paths
 _BASE_PATH = os.path.dirname(os.path.abspath(__file__))
-_IMAGE_PATH = os.path.join(_BASE_PATH, 'images')
 _MOVIE_PATH = os.path.join(_BASE_PATH, 'movies')
 
 
-# Download chunk size
-_CHUNK_SIZE = 1024**2
+# Download chunk size (B)
+_CHUNK_SIZE = 4*1024**2
+
+
+# Channels
+_CHANNELS = {'lwatv': {'url': 'https://lwalab.phys.unm.edu/lwatv'
+                      },
+             'lwatv2': {'url': 'https://lwalab.phys.unm.edu/lwatv2'
+                       },
+             'lwatv4': {'url': 'https://lwalab.phys.unm.edu/lwatv4'
+                       },
+            }
 
 
 def main(args):
     # Make sure there is a movie directory
     if not os.path.exists(_MOVIE_PATH):
-        print("%s not found, creating directory" % _MOVIE_PATH)
+        print(f"{_MOVIE_PATH} not found, creating directory")
         os.mkdir(_MOVIE_PATH)
         
     if args.query:
@@ -53,19 +57,39 @@ def main(args):
             
             sizes.append( os.path.getsize(movie) )
             
-        print("%i movies occupy %.1f MB of disk space" % (len(currentMovies), sum(sizes)/1024.0**2))
+        print(f"{len(currentMovies)} movies occupy {sum(sizes)/1024.0**2:.1f} MB of disk space")
         for movie,size,age in zip(movies, sizes, ages):
             if age == 1:
-                print("  %s @ %.1f MB -> %i day old" % (movie, size/1024.0**2, age))
+                print(f"  {movie} @ {size/1024.0**2:.1f} MB -> {age} day old")
             else:
-                print("  %s @ %.1f MB -> %i days old" % (movie, size/1024.0**2, age))
+                print(f"  {movie} @ {size/1024.0**2:.1f} MB -> {age} days old")
                 
     else:
+        # Check to see if we've changed channels
+        if args.lwatv4:
+            sel_chan = 'lwatv4'
+        elif args.lwatv2:
+            sel_chan = 'lwatv2'
+        else:
+            sel_chan = 'lwatv'
+        delete_all = False
+        chan_filename = os.path.join(_MOVIE_PATH, 'channel')
+        if os.path.exists(chan_filename):
+            with open(chan_filename, 'r') as fh:
+                prev_chan = fh.read().strip()
+                
+            if prev_chan != sel_chan:
+                delete_all = True
+                print(f"WARNING: Movies are changing from {prev_chan} to {sel_chan}")
+                
+        with open(chan_filename, 'w') as fh:
+            fh.write(sel_chan)
+            
         # Get the current MJD in order to figure out what can be downloaded
         tNow = time.time()
         jdNow = tNow/86400.0 + 2440587.5
         mjdNow = int(jdNow - 2400000.5)
-        movieDownloadRange = ["%i.mov" % i for i in range(mjdNow-args.days,mjdNow)]
+        movieDownloadRange = [f"{i}.mov" for i in range(mjdNow-args.days,mjdNow)]
         
         # Get the list of movies currently in the movie directory
         currentMovies = glob.glob(os.path.join(_MOVIE_PATH, '*.mov'))
@@ -74,48 +98,43 @@ def main(args):
         toDelete = []
         for movie in currentMovies:
             movieBase = os.path.basename(movie)
-            if movieBase not in movieDownloadRange:
+            if movieBase not in movieDownloadRange or delete_all:
                 toDelete.append(movie)
                 
         # Figure out which movies are missing from the directory
         toDownload = []
         for movie in movieDownloadRange:
             movieFull = os.path.join(_MOVIE_PATH, movie)
-            if movieFull not in currentMovies:
+            if movieFull not in currentMovies or delete_all:
                 toDownload.append(movie)
                 
         # Out with the old...
         if args.verbose:
-            print("%i movie(s) will be deleted" % len(toDelete))
+            print(f"{len(toDelete)} movie(s) will be deleted")
         for movie in toDelete:
             try:
                 os.unlink(movie)
             except Exception as e:
-                print("Error deleting %s: %s" % (os.path.basename(movie), str(e)))
+                print(f"Error deleting {os.path.basename(movie)}: {e}")
                 
         # ... in with the new
         if args.verbose:
-            print("%i movie(s) will be downloaded" % len(toDownload))
+            print(f"{len(toDownload)} movie(s) will be downloaded")
         for movie in toDownload:
-            if args.lwatv2:
-                url = 'https://lwalab.phys.unm.edu/lwatv2/%s' % movie
-            else:
-                url = 'https://lwalab.phys.unm.edu/lwatv/%s' % movie
+            url = f"{_CHANNELS[sel_chan]['url']}/{movie}"
             if args.verbose:
-                print("Downloading '%s'..." % url)
+                print(f"Downloading '{url}'...")
                 
             try:
-                dh = urlopen(url)
-                fh = open(os.path.join(_MOVIE_PATH, movie), 'wb')
-                while True:
-                    data = dh.read(_CHUNK_SIZE)
-                    if len(data) == 0:
-                        break
-                    fh.write(data)
-                dh.close()
-                fh.close()
+                with urlopen(url) as dh:
+                    with open(os.path.join(_MOVIE_PATH, movie), 'wb') as fh:
+                        while True:
+                            data = dh.read(_CHUNK_SIZE)
+                            if len(data) == 0:
+                                break
+                            fh.write(data)
             except Exception as e:
-                print("Error with %s: %s" % (movie, str(e)))
+                print(f"Error with {movie}: {e}")
                 continue
                 
         # Report on disk usage
@@ -124,7 +143,7 @@ def main(args):
         for movie in currentMovies:
             diskUsage += os.path.getsize(movie)
         if args.verbose:
-            print("%i movies occupy %.1f MB of disk space" % (len(currentMovies), diskUsage/1024.0**2))
+            print(f"{len(currentMovies)} movies occupy {diskUsage/1024.0**2:.1f} MB of disk space")
 
 
 if __name__ == "__main__":
@@ -137,8 +156,10 @@ if __name__ == "__main__":
                         help='display status messages')
     parser.add_argument('-q', '--query', action='store_true',
                         help='query the cache')
-    parser.add_argument('-2', '--lwatv2', action='store_true',
+    sgroup = parser.add_mutually_exclusive_group(required=False)
+    sgroup.add_argument('-2', '--lwatv2', action='store_true',
                         help='update movies from LWA-SV instead of LWA1')
+    sgroup.add_argument('-4', '--lwatv4', action='store_true',
+                        help='update movies from LWA-NA instead of LWA1')
     args = parser.parse_args()
     main(args)
-    
