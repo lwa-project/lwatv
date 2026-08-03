@@ -19,7 +19,28 @@ PYTHON=/usr/bin/python3
 GUI="${REPO_DIR}/lwaTV3.py"
 UPDATER="${REPO_DIR}/updateMovies.py"
 
+# The script uses `sudo` internally for the privileged steps (apt, systemctl),
+# but the movie cache, autostart entry, and crontab are all per-user and must
+# belong to the person setting up the display -- not root.  When the whole
+# script is launched with `sudo`, `${USER}`/`${HOME}` point at root, so resolve
+# the real invoking user from `${SUDO_USER}` and look their home up in passwd
+# (rather than trusting `${HOME}`, which sudo has already reset to /root).
+TARGET_USER="${SUDO_USER:-$(id -un)}"
+TARGET_HOME="$(getent passwd "${TARGET_USER}" | cut -d: -f6)"
+
+# Run a command as the invoking user.  When already running as that user this
+# is a plain exec; only when we are root (script run under sudo) do we drop
+# privileges back down with `sudo -u`.
+run_as_user() {
+    if [ "$(id -u)" -eq 0 ] && [ "${TARGET_USER}" != "root" ]; then
+        sudo -u "${TARGET_USER}" "$@"
+    else
+        "$@"
+    fi
+}
+
 echo "==> LWATV repository: ${REPO_DIR}"
+echo "==> Configuring for user: ${TARGET_USER} (${TARGET_HOME})"
 
 # 1. Packages -----------------------------------------------------------------
 #    * python3-tk / python3-pil / python3-pil.imagetk : the Tkinter GUI and
@@ -51,14 +72,17 @@ sudo apt update
 sudo apt install -y "${PACKAGES[@]}"
 
 # 2. Movie cache --------------------------------------------------------------
+#    Run as the invoking user so the cached .mov files (and the `channel` file
+#    the GUI rewrites) are owned by them -- not root -- otherwise the daily
+#    cron job and the GUI could never update the cache afterward.
 echo "==> Populating the movie cache"
-"${PYTHON}" "${UPDATER}"
+run_as_user "${PYTHON}" "${UPDATER}"
 
 # 3. Autostart entry ----------------------------------------------------------
 echo "==> Installing the desktop autostart entry"
-AUTOSTART_DIR="${HOME}/.config/autostart"
-mkdir -p "${AUTOSTART_DIR}"
-cat > "${AUTOSTART_DIR}/lwatv.desktop" <<EOF
+AUTOSTART_DIR="${TARGET_HOME}/.config/autostart"
+run_as_user mkdir -p "${AUTOSTART_DIR}"
+run_as_user tee "${AUTOSTART_DIR}/lwatv.desktop" >/dev/null <<EOF
 [Desktop Entry]
 Type=Application
 Name=LWATV GUI
@@ -74,10 +98,11 @@ echo "==> Installing the daily movie-update cron job"
 # otherwise the crontab entry below would be installed but never fire.
 sudo systemctl enable --now cron
 CRON_LINE="10 5 * * * ${PYTHON} ${UPDATER}"
-# Drop any prior LWATV updater line, then add the current one back.  The
-# `|| true` keeps `grep` from aborting the script (under `set -e`/`pipefail`)
-# when it selects no lines, e.g. on a fresh system with an empty crontab.
-( crontab -l 2>/dev/null | grep -vF "${UPDATER}" || true ; echo "${CRON_LINE}" ) | crontab -
+# Drop any prior LWATV updater line, then add the current one back, all against
+# the invoking user's crontab (not root's).  The `|| true` keeps `grep` from
+# aborting the script (under `set -e`/`pipefail`) when it selects no lines,
+# e.g. on a fresh system with an empty crontab.
+( run_as_user crontab -l 2>/dev/null | grep -vF "${UPDATER}" || true ; echo "${CRON_LINE}" ) | run_as_user crontab -
 
 cat <<EOF
 
