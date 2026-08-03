@@ -30,6 +30,7 @@ echo "==> LWATV repository: ${REPO_DIR}"
 #      H.264 decode for the .mov movies (qtdemux, h264parse, avdec_h264).
 PACKAGES=(
     git
+    cron
     python3
     python3-gi
     python3-gst-1.0
@@ -69,9 +70,14 @@ EOF
 
 # 4. Daily movie-update cron job (idempotent) ---------------------------------
 echo "==> Installing the daily movie-update cron job"
+# Make sure the cron daemon is installed (see PACKAGES) and actually running,
+# otherwise the crontab entry below would be installed but never fire.
+sudo systemctl enable --now cron
 CRON_LINE="10 5 * * * ${PYTHON} ${UPDATER}"
-# Drop any prior LWATV updater line, then add the current one back.
-( crontab -l 2>/dev/null | grep -vF "${UPDATER}" ; echo "${CRON_LINE}" ) | crontab -
+# Drop any prior LWATV updater line, then add the current one back.  The
+# `|| true` keeps `grep` from aborting the script (under `set -e`/`pipefail`)
+# when it selects no lines, e.g. on a fresh system with an empty crontab.
+( crontab -l 2>/dev/null | grep -vF "${UPDATER}" || true ; echo "${CRON_LINE}" ) | crontab -
 
 cat <<EOF
 
